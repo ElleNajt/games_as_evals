@@ -135,6 +135,19 @@ Categorize score as `"LOW"`, `"MED"`, or `"HIGH"`.
 | `deception_70b` | Deception | Llama 3.3 70B | Apollo roleplaying probe (Werewolf) |
 | `hallucination_8b` | Hallucination | Llama 3.1 8B | Hallucination detection (Two Truths and a Lie) |
 
+### Probe Score Format
+
+**All probe scores are probabilities in the range [0, 1]** after sigmoid transformation:
+- **0.0** = Very low deception/hallucination (truthful/factual)
+- **0.5** = Neutral/uncertain
+- **1.0** = Very high deception/hallucination (deceptive/false)
+
+The unified backend automatically applies sigmoid transformation to ensure consistency:
+- **Deception probes** (Apollo): Raw logits → `sigmoid(logits)` → probabilities
+- **Hallucination probes**: Already return probabilities, sigmoid is safely re-applied
+
+This ensures all probe scores have the same interpretation across different probe types.
+
 ## Testing
 
 Run tests:

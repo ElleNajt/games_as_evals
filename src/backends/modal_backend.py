@@ -1,11 +1,17 @@
 """Modal backend implementation with probe support."""
 
+import math
 from typing import Any, Dict, List, Optional
 
 import modal
 
 from ..probes.registry import get_probe_config
 from .base import GenerationResult, LLMBackend, ProbeScores
+
+
+def sigmoid(x: float) -> float:
+    """Apply sigmoid transformation to convert logits to probabilities."""
+    return 1 / (1 + math.exp(-x))
 
 
 class ModalBackend(LLMBackend):
@@ -134,15 +140,23 @@ class ModalBackend(LLMBackend):
             or "probe_probs" in result
         ):
             # Handle hallucination probe format (probe_probs instead of token_scores)
-            token_scores = result.get("token_scores") or result.get("probe_probs", [])
+            raw_token_scores = result.get("token_scores") or result.get(
+                "probe_probs", []
+            )
+
+            # Apply sigmoid transformation to convert logits to probabilities
+            # - Apollo (deception) probes return raw logits (can be large negative values)
+            # - Hallucination probes already apply sigmoid and return probabilities (0-1)
+            # Sigmoid is safe to apply to both since sigmoid(sigmoid(x)) ≈ sigmoid(x) for x in (0,1)
+            token_scores = [sigmoid(score) for score in raw_token_scores]
 
             # Calculate aggregate score if not provided
             if "aggregate_score" in result:
-                aggregate = result["aggregate_score"]
+                aggregate = sigmoid(result["aggregate_score"])
             elif "mean_score" in result:
-                aggregate = result["mean_score"]
+                aggregate = sigmoid(result["mean_score"])
             elif token_scores:
-                # Calculate mean for hallucination probes
+                # Calculate mean probability
                 aggregate = (
                     sum(token_scores) / len(token_scores) if token_scores else 0.0
                 )
@@ -152,11 +166,20 @@ class ModalBackend(LLMBackend):
             # Handle different probe result formats
             phase_scores = None
             if "prompt_score" in result:  # Werewolf 3-phase format
+                # Apply sigmoid to phase scores as well
                 phase_scores = {
-                    "prompt": result.get("prompt_score"),
-                    "cot": result.get("cot_score"),
-                    "action": result.get("action_score"),
-                    "generation": result.get("generation_score"),
+                    "prompt": sigmoid(result["prompt_score"])
+                    if result.get("prompt_score") is not None
+                    else None,
+                    "cot": sigmoid(result["cot_score"])
+                    if result.get("cot_score") is not None
+                    else None,
+                    "action": sigmoid(result["action_score"])
+                    if result.get("action_score") is not None
+                    else None,
+                    "generation": sigmoid(result["generation_score"])
+                    if result.get("generation_score") is not None
+                    else None,
                 }
 
             metadata = {
