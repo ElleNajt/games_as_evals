@@ -1,0 +1,20 @@
+# Core dependencies
+modal>=0.60.0
+python-dotenv>=1.0.0
+requests>=2.31.0
+
+# Testing
+pytest>=7.4.0
+pytest-mock>=3.11.0
+
+# Optional dependencies for specific backends
+# (install only if using that backend)
+
+# For Claude backend: requires `claude` CLI tool installed
+# See: https://github.com/anthropics/claude-cli
+
+# For OpenRouter backend: requires OPENROUTER_API_KEY env var
+# See: https://openrouter.ai/
+
+# For Modal backend: requires modal account and deployment
+# See: https://modal.com/
