@@ -9,7 +9,7 @@ import pytest
 
 from src.backends.base import GenerationResult, ProbeScores
 from src.config import GameConfig, PlayerConfig
-from src.logging import ResultsLogger
+from src.result_logging import ResultsLogger
 
 
 # Test GameConfig for logging tests
