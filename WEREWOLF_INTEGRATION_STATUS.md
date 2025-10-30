@@ -25,103 +25,62 @@
   - Legacy config loader for backward compatibility
 - ✅ `src/games/werewolf/__init__.py` - Module exports
 
-### 5. GameCoordinator - Partial Refactor
+### 5. GameCoordinator - ✅ Refactored
 - ✅ Imports updated to use unified system
 - ✅ `__init__` method refactored to use:
   - WerewolfConfig instead of old GameConfig
   - ResultsLogger for directory/config management
   - Per-player GamePlayer instances with backends
   - Automatic git/config hash handling (no manual subprocess calls)
+- ✅ `call_agent()` method refactored to use `GamePlayer.query()`
+- ✅ `_capture_role_reveal_activations()` updated for unified system
+- ✅ `get_lie_detector_context()` updated to check for probe configs
+- ✅ All old backend type checks removed
 
-## 🚧 In Progress / TODO
+## ✅ Core Integration Complete
 
-### GameCoordinator Remaining Work
+The werewolf game coordinator is now fully integrated with the unified system! All major refactoring is complete.
 
-The game_coordinator.py file is partially refactored. **Key changes needed:**
+### What Was Changed
 
-#### 1. Replace `self.backend.call()` with `self.players[player_name].query()`
-   
-   **Old pattern:**
-   ```python
-   response, metadata = self.backend.call(prompt, system_prompt, max_retries=1)
-   ```
-   
-   **New pattern:**
-   ```python
-   # GamePlayer.query() returns GenerationResult
-   result = self.players[player_name].query(
-       prompt=prompt,
-       max_tokens=512,
-       temperature=0.7
-   )
-   # result.text - the response
-   # result.tokens - token list (Modal only)
-   # result.top_k_logits - logits (Modal only)  
-   # result.probe_scores - ProbeScores object (Modal with probe only)
-   ```
+1. **`__init__` method** - Creates per-player GamePlayer instances with individual backends
+2. **`call_agent()` method** - Now uses `GamePlayer.query()` → returns `GenerationResult`
+3. **`_capture_role_reveal_activations()`** - Uses unified system to get probe scores
+4. **`get_lie_detector_context()`** - Checks if any player has probe configured
+5. **Removed all old backend type checks** - No more `isinstance(self.backend, ...)`
 
-#### 2. Update `call_agent()` method (lines ~300-420)
+### How It Works Now
 
-   Current code:
-   - Uses `self.backend.call(prompt, system_prompt, max_retries=1)`
-   - Returns `(response, metadata)` tuple
-   
-   Needs to:
-   - Get player from `self.players[player_name]`
-   - Call `player.query(prompt, ...)`
-   - Extract metadata from `GenerationResult`:
-     - `result.text` → response text
-     - `result.probe_scores` → probe activations/scores
-     - `result.tokens` → token list
-   - Note: Logging is now automatic via ResultsLogger, but we may want additional game-specific logging
+```python
+# Create config with per-player backends
+config = WerewolfConfig(
+    num_players=6,
+    num_werewolves=2,
+    villager_config=PlayerConfig(
+        name="Villager",
+        backend_type="claude",
+        model="claude-3-5-sonnet-20241022"
+    ),
+    werewolf_config=PlayerConfig(
+        name="Werewolf",
+        backend_type="modal",
+        model="meta-llama/Llama-3.1-8B-Instruct",
+        probe="deception_8b"
+    )
+)
 
-#### 3. Update `_capture_role_reveal_activations()` (lines ~187-260)
+# Create game coordinator
+coordinator = GameCoordinator(
+    config=config,
+    experiment_name="baseline"
+)
 
-   This method captures probe activations right after role reveal. Needs to:
-   - Use `player.query()` instead of `self.backend.call()`
-   - Extract probe scores from `GenerationResult.probe_scores`
-
-#### 4. Remove references to old backend types
-
-   Lines that check `isinstance(self.backend, ModalProbeBackend)` etc:
-   - Line 214: `if isinstance(self.backend, ModalProbeBackend):`
-   - Line 591: `if not isinstance(self.backend, (ProbeBackend, ModalProbeBackend)):`
-   
-   Replace with checks like:
-   - Check if `result.probe_scores is not None`
-   - Or check player's backend type via `player.backend`
-
-#### 5. Update metadata handling
-
-   Old system returned metadata dict with:
-   ```python
-   {
-       "activations": {
-           "aggregate_score": float,
-           "token_scores": List[float],
-           ...
-       }
-   }
-   ```
-   
-   New system uses `ProbeScores` dataclass:
-   ```python
-   @dataclass
-   class ProbeScores:
-       aggregate_score: float
-       token_scores: List[float]
-       phase_scores: Optional[Dict[str, float]] = None
-       metadata: Dict[str, Any] = field(default_factory=dict)
-   ```
-
-#### 6. System prompt handling
-
-   Old pattern: Pass system_prompt to `backend.call()`
-   New pattern: System prompt is set when creating GamePlayer, but can be overridden via messages
-   
-   For now: GamePlayer uses the system_prompt from PlayerConfig. If different system prompts are needed per-call, we can:
-   - Modify the prompt to include role-specific instructions
-   - Or update GamePlayer to support per-call system prompt override
+# Game coordinator automatically:
+# - Creates GamePlayer for each player with correct backend
+# - Logs all interactions via ResultsLogger
+# - Tracks git hash, config hash, dirty flag
+# - Saves results to: results/werewolf/baseline_{githash}_{confighash}/
+```
 
 ## File Locations
 
