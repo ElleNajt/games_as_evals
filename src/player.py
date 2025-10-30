@@ -1,7 +1,10 @@
 """Unified player abstraction for all games."""
 
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from .backends.base import LLMBackend, GenerationResult
+
+if TYPE_CHECKING:
+    from .logging.results_logger import ResultsLogger
 
 
 class GamePlayer:
@@ -10,13 +13,16 @@ class GamePlayer:
     
     This is the single interface that all games should use.
     Games handle their own prompt formatting and response parsing.
+    
+    Optionally logs all interactions to a ResultsLogger.
     """
     
     def __init__(
         self,
         name: str,
         backend: LLMBackend,
-        system_prompt: str = ""
+        system_prompt: str = "",
+        logger: Optional["ResultsLogger"] = None
     ):
         """
         Create a game player.
@@ -25,10 +31,12 @@ class GamePlayer:
             name: Player name (e.g., "Alice", "Bob")
             backend: LLM backend instance
             system_prompt: System prompt describing the player's role
+            logger: Optional ResultsLogger for automatic message logging
         """
         self.name = name
         self.backend = backend
         self.system_prompt = system_prompt
+        self.logger = logger
     
     def query(
         self,
@@ -64,8 +72,27 @@ class GamePlayer:
             messages.append({"role": "system", "content": self.system_prompt})
         messages.append({"role": "user", "content": prompt})
         
-        return self.backend.generate(
+        result = self.backend.generate(
             messages=messages,
             max_tokens=max_tokens,
             temperature=temperature
         )
+        
+        # Log interaction if logger is configured
+        if self.logger:
+            self.logger.log_message(
+                player_name=self.name,
+                role="assistant",
+                prompt=prompt,
+                response=result.text,
+                tokens=result.tokens,
+                top_k_logits=result.top_k_logits,
+                probe_scores=result.probe_scores,
+                metadata={
+                    "max_tokens": max_tokens,
+                    "temperature": temperature,
+                    "system_prompt": self.system_prompt,
+                }
+            )
+        
+        return result
