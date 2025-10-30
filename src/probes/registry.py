@@ -72,7 +72,7 @@ PROBE_REGISTRY = {
         probe_id="llama3_1_8b_lora_lambda_kl=0.5",
         probe_type="hallucination",
         model_name="meta-llama/Meta-Llama-3.1-8B-Instruct",
-        layer=16,  # Typical hallucination layer (verify from TTLGame)
+        layer=30,  # Layer 30 from TTLGame probe config
         modal_app_name="hallucination-probe-backend",  # From TTLGame repo
         repo_id="andyrdt/hallucination-probes",
         description="8B hallucination probe for Two Truths and a Lie",
