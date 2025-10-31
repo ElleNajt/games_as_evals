@@ -6,12 +6,8 @@ by loading from volume paths and returning per-token activations.
 """
 
 import modal
-import torch
-import torch.nn as nn
 from typing import List, Dict, Any, Optional, Tuple
 import json
-from transformers import AutoTokenizer
-import pickle
 from pathlib import Path
 import os
 
@@ -23,7 +19,7 @@ SCALEDOWN_WINDOW = 2 * 60  # 2 minutes
 TIMEOUT = 20 * 60  # 20 minutes
 
 # Volume for storing models and probes
-VOLUME = modal.Volume.from_name("unified-probe-models", create_if_missing=True)
+VOLUME = modal.Volume.from_name("unified-probe-models", create_if_missing=False)
 VOLUME_PATH = "/models"
 PROBES_DIR = Path(VOLUME_PATH) / "probes"
 
@@ -31,9 +27,9 @@ PROBES_DIR = Path(VOLUME_PATH) / "probes"
 if modal.is_local():
     from dotenv import load_dotenv
     load_dotenv()
-    hf_token = os.getenv("HF_TOKEN")
+    hf_token = os.getenv("HF_TOKEN") or os.getenv("HF_TOKEN_READ")
     if not hf_token:
-        raise ValueError("HF_TOKEN must be set in environment or .env file")
+        raise ValueError("HF_TOKEN or HF_TOKEN_READ must be set in environment or .env file")
     LOCAL_HF_TOKEN_SECRET = modal.Secret.from_dict({"HF_TOKEN": hf_token})
 else:
     LOCAL_HF_TOKEN_SECRET = modal.Secret.from_dict({})
@@ -56,7 +52,7 @@ image = (
 app = modal.App("unified-probe-service", image=image)
 
 
-def load_probe_from_volume(probe_path: Path) -> Tuple[nn.Module, int]:
+def load_probe_from_volume(probe_path: Path):
     """
     Load a probe from the volume.
     
@@ -70,6 +66,10 @@ def load_probe_from_volume(probe_path: Path) -> Tuple[nn.Module, int]:
     Returns:
         (probe_head, layer_idx)
     """
+    import torch
+    import torch.nn as nn
+    import pickle
+    
     # Check for Apollo format first (.pt file)
     apollo_file = probe_path / "probe_detector.pt"
     if apollo_file.exists():
@@ -150,17 +150,21 @@ class UnifiedProbeService:
     
     model_name: str = modal.parameter(default=DEFAULT_MODEL)
     
-    def __init__(self):
-        self.llm = None
-        self.tokenizer = None
-        self.loaded_probes = {}  # Cache: {probe_path: (probe_head, layer_idx)}
+    # These will be initialized in load_model
+    llm = None
+    tokenizer = None
+    loaded_probes = None
     
     @modal.enter()
     def load_model(self):
         """Load vLLM model on container startup."""
         from vllm import LLM
+        from transformers import AutoTokenizer
         
         print(f"Loading vLLM model: {self.model_name}")
+        
+        # Initialize cache
+        self.loaded_probes = {}
         
         # Initialize vLLM
         self.llm = LLM(
@@ -181,13 +185,13 @@ class UnifiedProbeService:
         
         print("Model loaded successfully!")
     
-    def _load_probe_if_needed(self, probe_path: str) -> Tuple[nn.Module, int]:
+    def _load_probe_if_needed(self, probe_path: str):
         """Load probe from volume if not already cached."""
         if probe_path not in self.loaded_probes:
             path = Path(probe_path)
             if not path.is_absolute():
-                # Make relative paths relative to PROBES_DIR
-                path = PROBES_DIR / path
+                # Make relative paths relative to /models/probes/
+                path = Path("/models/probes") / path
             
             probe_head, layer_idx = load_probe_from_volume(path)
             
@@ -227,6 +231,7 @@ class UnifiedProbeService:
             }
         """
         from vllm import SamplingParams, TokensPrompt
+        import torch
         
         try:
             # Load probe
@@ -363,10 +368,29 @@ class UnifiedProbeService:
             return {"error": f"Generation failed: {str(e)}"}
 
 
-@app.function(image=image)
+@app.function(image=image, volumes={VOLUME_PATH: VOLUME})
 def health_check():
     """Health check endpoint."""
-    return {"status": "healthy", "service": "unified-probe-service"}
+    import os
+    from pathlib import Path
+    
+    # Check what's in the volume root
+    root = Path("/models")
+    if root.exists():
+        root_files = list(str(f) for f in root.iterdir())
+        
+        # Check probes subdirectory
+        probes_dir = root / "probes"
+        if probes_dir.exists():
+            probe_files = {}
+            for item in probes_dir.iterdir():
+                if item.is_dir():
+                    probe_files[str(item)] = list(str(f) for f in item.iterdir())
+            return {"status": "healthy", "service": "unified-probe-service", "root": root_files, "probes": probe_files}
+        else:
+            return {"status": "healthy", "service": "unified-probe-service", "root": root_files, "error": "probes subdirectory not found"}
+    else:
+        return {"status": "healthy", "service": "unified-probe-service", "error": "/models not found"}
 
 
 if __name__ == "__main__":
