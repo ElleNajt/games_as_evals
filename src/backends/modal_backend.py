@@ -57,19 +57,11 @@ class ModalBackend(LLMBackend):
         if self.service is None:
             print(f"Connecting to Modal app '{self.modal_app_name}'...")
 
-            # Determine service class name based on app
-            if "werewolf" in self.modal_app_name or "apollo" in self.modal_app_name:
-                service_class_name = "ApolloProbeService"
-            elif "hallucination" in self.modal_app_name:
-                service_class_name = "ProbeInferenceService"
-            else:
-                # Default assumption
-                service_class_name = "ApolloProbeService"
-
-            cls = modal.Cls.from_name(self.modal_app_name, service_class_name)
+            # All probes now use UnifiedProbeService
+            cls = modal.Cls.from_name(self.modal_app_name, "UnifiedProbeService")
             self.service = cls()
 
-            print(f"Connected to Modal service {service_class_name}!")
+            print(f"Connected to UnifiedProbeService!")
 
     def generate(
         self,
@@ -104,104 +96,50 @@ class ModalBackend(LLMBackend):
         self, messages: List[Dict[str, str]], max_tokens: int, temperature: float
     ) -> GenerationResult:
         """Generate with probe scoring enabled."""
-        # Prepare parameters based on probe type
-        params = {
-            "messages": messages,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-        }
-
-        # Add probe_id and repo_id for hallucination probes
-        if self.probe_config and self.probe_config.probe_type == "hallucination":
-            params["probe_id"] = self.probe_config.probe_id
-            if self.probe_config.repo_id:
-                params["repo_id"] = self.probe_config.repo_id
-            # Add default threshold for hallucination probes
-            params["threshold"] = 0.5
-
-        # Use generate_with_probe method
-        try:
-            result = self.service.generate_with_probe.remote(**params)
-        except AttributeError:
-            # Try alternative method name for hallucination probes
-            result = self.service.predict_conversation.remote(**params)
+        # Unified interface: all probes use same method with volume path
+        result = self.service.generate_with_probe.remote(
+            messages=messages,
+            probe_path=self.probe_config.volume_path,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
 
         if "error" in result:
             raise RuntimeError(f"Modal generation failed: {result['error']}")
 
         # Extract text
-        text = result.get("generated_text") or result.get("text", "")
+        text = result.get("generated_text", "")
 
-        # Extract probe scores
+        # Extract probe scores (unified format)
         probe_scores = None
-        if (
-            "aggregate_score" in result
-            or "token_scores" in result
-            or "probe_probs" in result
-        ):
-            # Handle hallucination probe format (probe_probs instead of token_scores)
-            raw_token_scores = result.get("token_scores") or result.get(
-                "probe_probs", []
-            )
+        if "token_scores" in result:
+            raw_token_scores = result["token_scores"]
 
             # Apply sigmoid transformation to convert logits to probabilities
-            # - Apollo (deception) probes return raw logits (can be large negative values)
-            # - Hallucination probes already apply sigmoid and return probabilities (0-1)
-            # Sigmoid is safe to apply to both since sigmoid(sigmoid(x)) ≈ sigmoid(x) for x in (0,1)
+            # UnifiedProbeService returns raw probe scores (can be large negative values for Apollo)
+            # We convert to [0, 1] probabilities for consistent interpretation
             token_scores = [sigmoid(score) for score in raw_token_scores]
 
-            # Calculate aggregate score if not provided
-            if "aggregate_score" in result:
-                aggregate = sigmoid(result["aggregate_score"])
-            elif "mean_score" in result:
-                aggregate = sigmoid(result["mean_score"])
-            elif token_scores:
-                # Calculate mean probability
-                aggregate = (
-                    sum(token_scores) / len(token_scores) if token_scores else 0.0
-                )
-            else:
-                aggregate = 0.0
-
-            # Handle different probe result formats
-            phase_scores = None
-            if "prompt_score" in result:  # Werewolf 3-phase format
-                # Apply sigmoid to phase scores as well
-                phase_scores = {
-                    "prompt": sigmoid(result["prompt_score"])
-                    if result.get("prompt_score") is not None
-                    else None,
-                    "cot": sigmoid(result["cot_score"])
-                    if result.get("cot_score") is not None
-                    else None,
-                    "action": sigmoid(result["action_score"])
-                    if result.get("action_score") is not None
-                    else None,
-                    "generation": sigmoid(result["generation_score"])
-                    if result.get("generation_score") is not None
-                    else None,
-                }
+            # Calculate aggregate score as mean probability
+            aggregate = sum(token_scores) / len(token_scores) if token_scores else 0.0
 
             metadata = {
-                "num_tokens": result.get("num_tokens") or len(token_scores),
+                "num_tokens": result.get("generated_num_tokens", len(token_scores)),
+                "prompt_num_tokens": result.get("prompt_num_tokens", 0),
                 "probe_type": self.probe_config.probe_type
                 if self.probe_config
                 else "unknown",
             }
 
-            # Add entropy info if available (hallucination probes)
-            if "token_entropies" in result:
-                metadata["token_entropies"] = result["token_entropies"]
-
             probe_scores = ProbeScores(
                 aggregate_score=aggregate,
                 token_scores=token_scores,
-                phase_scores=phase_scores,
+                phase_scores=None,  # Games can compute phase scores from token_scores if needed
                 metadata=metadata,
             )
 
-        # Extract tokens - handle both formats
-        tokens = result.get("tokens") or result.get("generated_tokens")
+        # Extract tokens
+        tokens = result.get("generated_tokens")
 
         return GenerationResult(
             text=text,
