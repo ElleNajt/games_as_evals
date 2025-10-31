@@ -195,8 +195,8 @@ class UnifiedProbeService:
             
             probe_head, layer_idx = load_probe_from_volume(path)
             
-            # Move to GPU
-            probe_head = probe_head.to('cuda')
+            # Move to GPU and convert to bfloat16 to match vLLM model dtype
+            probe_head = probe_head.to(device='cuda', dtype=torch.bfloat16)
             probe_head.eval()
             
             self.loaded_probes[probe_path] = (probe_head, layer_idx)
