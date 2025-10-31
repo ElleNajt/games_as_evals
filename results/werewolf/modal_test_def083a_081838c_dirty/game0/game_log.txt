@@ -14,3 +14,33 @@ Role assignments (secret):
 
 === CAPTURING ROLE-REVEAL ACTIVATIONS ===
 Probing each player's immediate reaction to their role assignment...
+  Player1: Error capturing activations: Modal generation failed: Generation failed: Error in model execution (input dumped to /tmp/err_execute_model_input_20251031-003804.pkl): mat1 and mat2 must have the same dtype, but got BFloat16 and Float
+  Player2: Error capturing activations: Modal generation failed: Generation failed: Error in model execution (input dumped to /tmp/err_execute_model_input_20251031-003804.pkl): mat1 and mat2 must have the same dtype, but got BFloat16 and Float
+  Player3: Error capturing activations: Modal generation failed: Generation failed: Error in model execution (input dumped to /tmp/err_execute_model_input_20251031-003805.pkl): mat1 and mat2 must have the same dtype, but got BFloat16 and Float
+  Player4: Error capturing activations: Modal generation failed: Generation failed: Error in model execution (input dumped to /tmp/err_execute_model_input_20251031-003805.pkl): mat1 and mat2 must have the same dtype, but got BFloat16 and Float
+  Player5: Error capturing activations: Modal generation failed: Generation failed: Error in model execution (input dumped to /tmp/err_execute_model_input_20251031-003805.pkl): mat1 and mat2 must have the same dtype, but got BFloat16 and Float
+  Player6: Error capturing activations: Modal generation failed: Generation failed: Error in model execution (input dumped to /tmp/err_execute_model_input_20251031-003805.pkl): mat1 and mat2 must have the same dtype, but got BFloat16 and Float
+Role-reveal activation capture complete.
+
+
+==================================================
+TURN 1 - NIGHT PHASE
+==================================================
+
+[Calling agent for Player1] (werewolf)
+  Backend error on attempt 1: Modal generation failed: Generation failed: Error in model execution (input dumped to /tmp/err_execute_model_input_20251031-003805.pkl): mat1 and mat2 must have the same dtype, but got BFloat16 and Float
+  Retry 1/5 for Player1...
+  Backend error on attempt 2: Modal generation failed: Generation failed: Error in model execution (input dumped to /tmp/err_execute_model_input_20251031-003806.pkl): mat1 and mat2 must have the same dtype, but got BFloat16 and Float
+  Retry 2/5 for Player1...
+  Backend error on attempt 3: Modal generation failed: Generation failed: Error in model execution (input dumped to /tmp/err_execute_model_input_20251031-003806.pkl): mat1 and mat2 must have the same dtype, but got BFloat16 and Float
+  Retry 3/5 for Player1...
+  Backend error on attempt 4: Modal generation failed: Generation failed: Error in model execution (input dumped to /tmp/err_execute_model_input_20251031-003806.pkl): mat1 and mat2 must have the same dtype, but got BFloat16 and Float
+  Retry 4/5 for Player1...
+  Backend error on attempt 5: Modal generation failed: Generation failed: Error in model execution (input dumped to /tmp/err_execute_model_input_20251031-003806.pkl): mat1 and mat2 must have the same dtype, but got BFloat16 and Float
+
+==================================================
+GAME ABORTED: Player1 backend failed after 5 attempts: Modal generation failed: Generation failed: Error in model execution (input dumped to /tmp/err_execute_model_input_20251031-003806.pkl): mat1 and mat2 must have the same dtype, but got BFloat16 and Float
+==================================================
+
+Game stats saved to results/werewolf/modal_test_def083a_081838c_dirty/game0/game_stats.json
+Warning: Failed to generate visualizations: No module named 'visualization'

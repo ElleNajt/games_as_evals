@@ -187,6 +187,8 @@ class UnifiedProbeService:
     
     def _load_probe_if_needed(self, probe_path: str):
         """Load probe from volume if not already cached."""
+        import torch
+        
         if probe_path not in self.loaded_probes:
             path = Path(probe_path)
             if not path.is_absolute():
