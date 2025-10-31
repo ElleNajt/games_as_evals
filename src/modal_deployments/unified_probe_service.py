@@ -20,8 +20,8 @@ TIMEOUT = 20 * 60  # 20 minutes
 
 # Volume for storing models and probes
 VOLUME = modal.Volume.from_name("unified-probe-models", create_if_missing=False)
-VOLUME_PATH = "/models"
-PROBES_DIR = Path(VOLUME_PATH) / "probes"
+VOLUME_PATH = "/volume"  # Mount volume at /volume, it contains models/ subdirectory
+PROBES_DIR = Path(VOLUME_PATH) / "models" / "probes"
 
 # Load HF token for accessing Llama models
 if modal.is_local():
@@ -173,7 +173,7 @@ class UnifiedProbeService:
             max_model_len=8192,
             trust_remote_code=True,
             enforce_eager=True,  # Required for hooks
-            download_dir=VOLUME_PATH,
+            download_dir=str(Path(VOLUME_PATH) / "models"),
             tensor_parallel_size=N_GPU,
         )
         
@@ -190,8 +190,8 @@ class UnifiedProbeService:
         if probe_path not in self.loaded_probes:
             path = Path(probe_path)
             if not path.is_absolute():
-                # Make relative paths relative to /models/probes/
-                path = Path("/models/probes") / path
+                # Make relative paths relative to /volume/models/probes/
+                path = Path("/volume/models/probes") / path
             
             probe_head, layer_idx = load_probe_from_volume(path)
             
@@ -374,23 +374,22 @@ def health_check():
     import os
     from pathlib import Path
     
-    # Check what's in the volume root
-    root = Path("/models")
-    if root.exists():
-        root_files = list(str(f) for f in root.iterdir())
-        
-        # Check probes subdirectory
-        probes_dir = root / "probes"
-        if probes_dir.exists():
-            probe_files = {}
-            for item in probes_dir.iterdir():
-                if item.is_dir():
-                    probe_files[str(item)] = list(str(f) for f in item.iterdir())
-            return {"status": "healthy", "service": "unified-probe-service", "root": root_files, "probes": probe_files}
-        else:
-            return {"status": "healthy", "service": "unified-probe-service", "root": root_files, "error": "probes subdirectory not found"}
+    # Check what's in the volume
+    probes_dir = Path("/volume/models/probes")
+    if probes_dir.exists():
+        probe_files = {}
+        for item in probes_dir.iterdir():
+            if item.is_dir():
+                probe_files[str(item)] = list(str(f) for f in item.iterdir())
+        return {"status": "healthy", "service": "unified-probe-service", "probes": probe_files}
     else:
-        return {"status": "healthy", "service": "unified-probe-service", "error": "/models not found"}
+        # Check what's at volume root for debugging
+        vol_root = Path("/volume")
+        if vol_root.exists():
+            root_contents = list(str(f) for f in vol_root.iterdir())
+            return {"status": "healthy", "service": "unified-probe-service", "error": "probes not found", "volume_root": root_contents}
+        else:
+            return {"status": "healthy", "service": "unified-probe-service", "error": "/volume not mounted"}
 
 
 if __name__ == "__main__":

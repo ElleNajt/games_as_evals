@@ -1,0 +1,8 @@
+{
+  "hidden_size": 4096,
+  "layer_idx": 12,
+  "probe_type": "contrastive_deception",
+  "source_model": "Meta-Llama-3.1-8B",
+  "source_repo": "jakainic/lie-detection-probes",
+  "source_file": "Meta-Llama-3.1-8B_layer12_token.pt"
+}

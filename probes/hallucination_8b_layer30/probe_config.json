@@ -1,0 +1,5 @@
+{
+    "target_layer_name": "LlamaDecoderLayer",
+    "layer_idx": 30,
+    "hidden_size": 4096
+}
