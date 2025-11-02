@@ -6,11 +6,9 @@ from typing import Dict, List, Optional, Any
 
 
 @dataclass
-class ProbeScores:
+class ProbeScoreData:
     """
-    Probe scoring information from activation probes.
-    
-    Only populated by Modal backend. Other backends return None.
+    Scoring information from a single activation probe.
     """
     aggregate_score: float
     """Mean/summary score across all tokens"""
@@ -22,7 +20,60 @@ class ProbeScores:
     """Phase-based scores (e.g., prompt/CoT/action for Werewolf)"""
     
     metadata: Dict[str, Any] = field(default_factory=dict)
-    """Game-specific metadata (num_tokens, etc.)"""
+    """Probe-specific metadata"""
+
+
+@dataclass
+class ProbeScores:
+    """
+    Probe scoring information from activation probes.
+    
+    Supports multiple probes running simultaneously.
+    Only populated by Modal backend. Other backends return None.
+    """
+    scores: Dict[str, ProbeScoreData]
+    """Probe scores keyed by probe name (e.g., {"deception_8b": ..., "hallucination_8b": ...})"""
+    
+    def __getitem__(self, probe_name: str) -> ProbeScoreData:
+        """Allow dict-like access: probe_scores["deception_8b"]"""
+        return self.scores[probe_name]
+    
+    def __contains__(self, probe_name: str) -> bool:
+        """Allow 'in' checks: if "deception_8b" in probe_scores"""
+        return probe_name in self.scores
+    
+    def keys(self):
+        """Return probe names"""
+        return self.scores.keys()
+    
+    # Backward compatibility: access first probe's scores directly
+    @property
+    def aggregate_score(self) -> float:
+        """Backward compat: return aggregate score from first probe"""
+        if not self.scores:
+            raise ValueError("No probe scores available")
+        return list(self.scores.values())[0].aggregate_score
+    
+    @property
+    def token_scores(self) -> List[float]:
+        """Backward compat: return token scores from first probe"""
+        if not self.scores:
+            raise ValueError("No probe scores available")
+        return list(self.scores.values())[0].token_scores
+    
+    @property
+    def phase_scores(self) -> Optional[Dict[str, float]]:
+        """Backward compat: return phase scores from first probe"""
+        if not self.scores:
+            raise ValueError("No probe scores available")
+        return list(self.scores.values())[0].phase_scores
+    
+    @property
+    def metadata(self) -> Dict[str, Any]:
+        """Backward compat: return metadata from first probe"""
+        if not self.scores:
+            raise ValueError("No probe scores available")
+        return list(self.scores.values())[0].metadata
 
 
 @dataclass
@@ -44,7 +95,7 @@ class GenerationResult:
     """Top-k logits per token (Modal only, if requested)"""
     
     probe_scores: Optional[ProbeScores] = None
-    """Probe activation scores (Modal only, if probe enabled)"""
+    """Probe activation scores (Modal only, if probes enabled)"""
 
 
 class LLMBackend(ABC):

@@ -215,6 +215,26 @@ class UnifiedProbeService:
         temperature: float = 0.7,
     ) -> Dict[str, Any]:
         """
+        Generate text with per-token probe activations (public API).
+        
+        This is a wrapper around _generate_with_probe_impl for external calls.
+        """
+        return self._generate_with_probe_impl(
+            messages=messages,
+            probe_path=probe_path,
+            max_tokens=max_tokens,
+            temperature=temperature
+        )
+    
+    def _generate_with_probe_impl(
+        self,
+        messages: List[Dict[str, str]],
+        probe_path: str,
+        max_tokens: int = 512,
+        temperature: float = 0.7,
+    ) -> Dict[str, Any]:
+        """
+        Internal implementation of generate_with_probe.
         Generate text with per-token probe activations.
         
         Args:
@@ -327,6 +347,100 @@ class UnifiedProbeService:
                 "error": f"Generation failed: {str(e)}",
                 "traceback": traceback.format_exc()
             }
+    
+    @modal.method()
+    def generate_with_probes(
+        self,
+        messages: List[Dict[str, str]],
+        probe_paths: Dict[str, str],
+        max_tokens: int = 512,
+        temperature: float = 0.7,
+    ) -> Dict[str, Any]:
+        """
+        Generate text with multiple probe activations.
+        
+        NOTE: Currently runs generation N times (once per probe) due to complexity
+        of attaching multiple hooks. With temperature > 0, text may differ slightly
+        between runs. The first probe's generated text is returned.
+        
+        Args:
+            messages: Chat messages
+            probe_paths: Dict mapping probe names to volume paths
+            max_tokens: Maximum tokens to generate
+            temperature: Sampling temperature
+            
+        Returns:
+            {
+                "generated_text": str,
+                "generated_tokens": List[str],
+                "probe_results": {
+                    "probe_name1": {
+                        "token_scores": List[float],
+                        "prompt_num_tokens": int,
+                        "generated_num_tokens": int,
+                    },
+                    "probe_name2": {...},
+                },
+            }
+        """
+        try:
+            probe_results = {}
+            generated_text = None
+            generated_tokens = None
+            
+            # Run each probe separately
+            # Note: We need to call the internal implementation directly since we can't
+            # use .remote() on self methods from within the class
+            for probe_name, probe_path in probe_paths.items():
+                # Call the internal implementation directly
+                probe_result = self._generate_with_probe_impl(
+                    messages=messages,
+                    probe_path=probe_path,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                )
+                
+                if "error" in probe_result:
+                    return {"error": f"Probe {probe_name} failed: {probe_result['error']}"}
+                
+                # Store probe-specific results
+                probe_results[probe_name] = {
+                    "token_scores": probe_result["token_scores"],
+                    "prompt_num_tokens": probe_result["prompt_num_tokens"],
+                    "generated_num_tokens": probe_result["generated_num_tokens"],
+                }
+                
+                # Use text/tokens from first probe
+                if generated_text is None:
+                    generated_text = probe_result["generated_text"]
+                    generated_tokens = probe_result["generated_tokens"]
+            
+            return {
+                "generated_text": generated_text,
+                "generated_tokens": generated_tokens,
+                "probe_results": probe_results,
+            }
+            
+        except Exception as e:
+            import traceback
+            return {
+                "error": f"Multi-probe generation failed: {str(e)}",
+                "traceback": traceback.format_exc()
+            }
+    
+    @modal.method()
+    def generate(
+        self,
+        messages: List[Dict[str, str]],
+        max_tokens: int = 512,
+        temperature: float = 0.7,
+    ) -> Dict[str, Any]:
+        """Alias for generate_without_probe for backward compatibility."""
+        return self.generate_without_probe(
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature
+        )
     
     @modal.method()
     def generate_without_probe(

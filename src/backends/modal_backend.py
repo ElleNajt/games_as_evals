@@ -1,12 +1,12 @@
-"""Modal backend implementation with probe support."""
+"""Modal backend implementation with multi-probe support."""
 
 import math
 from typing import Any, Dict, List, Optional
 
 import modal
 
-from ..probes.registry import get_probe_config
-from .base import GenerationResult, LLMBackend, ProbeScores
+from ..probes.registry import get_probe_config, PROBE_REGISTRY
+from .base import GenerationResult, LLMBackend, ProbeScores, ProbeScoreData
 
 
 def sigmoid(x: float) -> float:
@@ -18,13 +18,14 @@ class ModalBackend(LLMBackend):
     """
     Backend using Modal for generation with optional probe scoring.
 
-    Supports probes, tokens, and optionally logits.
-    Connects to existing Modal deployments (werewolf-apollo-probe, etc.)
+    Supports multiple probes running simultaneously.
+    Connects to unified-probe-service Modal deployment.
     """
 
     def __init__(
         self,
         probe: Optional[str] = None,
+        probes: Optional[List[str]] = None,
         modal_app_name: Optional[str] = None,
         **kwargs,
     ):
@@ -32,35 +33,44 @@ class ModalBackend(LLMBackend):
         Initialize Modal backend.
 
         Args:
-            probe: Probe name from registry (e.g., "deception_8b", "hallucination_8b")
-                  If None, no probe scoring is performed.
+            probe: Single probe name (backward compat) - converted to list internally
+            probes: List of probe names (e.g., ["deception_8b", "hallucination_8b"])
             modal_app_name: Override Modal app name (defaults to probe config)
             **kwargs: Additional config (unused for now)
         """
-        self.probe_name = probe
-        self.probe_config = get_probe_config(probe) if probe else None
-        self.modal_app_name = modal_app_name or (
-            self.probe_config.modal_app_name if self.probe_config else None
-        )
+        # Convert single probe to list for internal consistency
+        if probe and not probes:
+            probes = [probe]
+        elif probe and probes:
+            raise ValueError("Specify either 'probe' or 'probes', not both")
+        
+        self.probe_names = probes or []
+        
+        # Get configs for all probes
+        self.probe_configs = {}
+        if self.probe_names:
+            for probe_name in self.probe_names:
+                self.probe_configs[probe_name] = get_probe_config(probe_name)
+        
+        # Determine modal_app_name (all probes should use same app)
+        if not modal_app_name and self.probe_configs:
+            apps = set(cfg.modal_app_name for cfg in self.probe_configs.values())
+            if len(apps) > 1:
+                raise ValueError(f"All probes must use same Modal app, got: {apps}")
+            modal_app_name = list(apps)[0]
+        
+        self.modal_app_name = modal_app_name or "unified-probe-service"
         self.service = None
 
-        if not self.modal_app_name:
-            raise ValueError(
-                "modal_app_name must be provided if probe is None. "
-                "Either specify probe (e.g., 'deception_8b') or modal_app_name."
-            )
-
-        print(f"ModalBackend initialized (app={self.modal_app_name}, probe={probe})")
+        probe_str = ", ".join(self.probe_names) if self.probe_names else "none"
+        print(f"ModalBackend initialized (app={self.modal_app_name}, probes=[{probe_str}])")
 
     def _ensure_connected(self):
         """Lazy connect to Modal service."""
         if self.service is None:
             print(f"Connecting to Modal app '{self.modal_app_name}'...")
-
-            # All probes now use UnifiedProbeService
             cls = modal.Cls.from_name(self.modal_app_name, "UnifiedProbeService")
             self.service = cls()
-
             print(f"Connected to UnifiedProbeService!")
 
     def generate(
@@ -78,28 +88,31 @@ class ModalBackend(LLMBackend):
             temperature: Sampling temperature
 
         Returns:
-            GenerationResult with text, tokens, and probe_scores (if probe enabled)
+            GenerationResult with text, tokens, and probe_scores (if probes enabled)
         """
         self._ensure_connected()
 
-        # Choose generation method based on whether probe is enabled
-        if self.probe_config:
-            # Generate with probe scoring
-            result = self._generate_with_probe(messages, max_tokens, temperature)
+        if self.probe_configs:
+            result = self._generate_with_probes(messages, max_tokens, temperature)
         else:
-            # Standard generation without probe
-            result = self._generate_without_probe(messages, max_tokens, temperature)
+            result = self._generate_without_probes(messages, max_tokens, temperature)
 
         return result
 
-    def _generate_with_probe(
+    def _generate_with_probes(
         self, messages: List[Dict[str, str]], max_tokens: int, temperature: float
     ) -> GenerationResult:
-        """Generate with probe scoring enabled."""
-        # Unified interface: all probes use same method with volume path
-        result = self.service.generate_with_probe.remote(
+        """Generate with probe scoring enabled (one or more probes)."""
+        # Build probe paths dict
+        probe_paths = {
+            name: config.volume_path 
+            for name, config in self.probe_configs.items()
+        }
+        
+        # Call unified service with multiple probes
+        result = self.service.generate_with_probes.remote(
             messages=messages,
-            probe_path=self.probe_config.volume_path,
+            probe_paths=probe_paths,
             max_tokens=max_tokens,
             temperature=temperature,
         )
@@ -107,48 +120,46 @@ class ModalBackend(LLMBackend):
         if "error" in result:
             raise RuntimeError(f"Modal generation failed: {result['error']}")
 
-        # Extract text
         text = result.get("generated_text", "")
-
-        # Extract probe scores (unified format)
-        probe_scores = None
-        if "token_scores" in result:
-            raw_token_scores = result["token_scores"]
-
-            # Apply sigmoid transformation to convert logits to probabilities
-            # UnifiedProbeService returns raw probe scores (can be large negative values for Apollo)
-            # We convert to [0, 1] probabilities for consistent interpretation
-            token_scores = [sigmoid(score) for score in raw_token_scores]
-
-            # Calculate aggregate score as mean probability
-            aggregate = sum(token_scores) / len(token_scores) if token_scores else 0.0
-
-            metadata = {
-                "num_tokens": result.get("generated_num_tokens", len(token_scores)),
-                "prompt_num_tokens": result.get("prompt_num_tokens", 0),
-                "probe_type": self.probe_config.probe_type
-                if self.probe_config
-                else "unknown",
-            }
-
-            probe_scores = ProbeScores(
-                aggregate_score=aggregate,
-                token_scores=token_scores,
-                phase_scores=None,  # Games can compute phase scores from token_scores if needed
-                metadata=metadata,
-            )
-
-        # Extract tokens
         tokens = result.get("generated_tokens")
+
+        # Extract probe scores for each probe
+        probe_scores = None
+        if "probe_results" in result:
+            probe_score_dict = {}
+            
+            for probe_name, probe_data in result["probe_results"].items():
+                raw_token_scores = probe_data.get("token_scores", [])
+                
+                # Apply sigmoid transformation
+                token_scores = [sigmoid(score) for score in raw_token_scores]
+                
+                # Calculate aggregate
+                aggregate = sum(token_scores) / len(token_scores) if token_scores else 0.0
+                
+                metadata = {
+                    "num_tokens": len(token_scores),
+                    "probe_type": self.probe_configs[probe_name].probe_type,
+                    "layer": self.probe_configs[probe_name].layer,
+                }
+                
+                probe_score_dict[probe_name] = ProbeScoreData(
+                    aggregate_score=aggregate,
+                    token_scores=token_scores,
+                    phase_scores=None,
+                    metadata=metadata,
+                )
+            
+            probe_scores = ProbeScores(scores=probe_score_dict)
 
         return GenerationResult(
             text=text,
             tokens=tokens,
-            top_k_logits=None,  # Not currently extracted
+            top_k_logits=None,
             probe_scores=probe_scores,
         )
 
-    def _generate_without_probe(
+    def _generate_without_probes(
         self, messages: List[Dict[str, str]], max_tokens: int, temperature: float
     ) -> GenerationResult:
         """Generate without probe scoring."""
@@ -168,8 +179,8 @@ class ModalBackend(LLMBackend):
 
     @property
     def supports_probes(self) -> bool:
-        return self.probe_config is not None
+        return len(self.probe_configs) > 0
 
     @property
     def supports_logits(self) -> bool:
-        return False  # Not currently implemented
+        return False
