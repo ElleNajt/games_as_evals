@@ -53,6 +53,56 @@ modal setup
 modal deploy src/modal_deployments/unified_probe_service.py
 ```
 
+## Running Experiments
+
+The easiest way to run experiments with probes is using the provided example scripts:
+
+### Werewolf with 8B Model + Both Probes
+
+```bash
+python examples/run_werewolf_8b.py
+```
+
+This runs a 5-player Werewolf game with:
+- Model: Llama 3.1 8B Instruct
+- Probes: `deception_8b` + `hallucination_8b`
+- Top-k logits: 10 alternatives per token
+- Results saved to: `results/werewolf/werewolf_8b_demo/`
+
+### Two Truths and a Lie with 8B Model + Both Probes
+
+```bash
+python examples/run_ttl_8b.py
+```
+
+This runs a TTL round with:
+- Model: Llama 3.1 8B Instruct
+- Probes: `deception_8b` + `hallucination_8b`
+- Deceiver generates own facts
+- Results saved to: `results/ttl/ttl_8b_demo/round1/`
+
+### Available Experiment Configurations
+
+You can use predefined experiment configs for consistent settings:
+
+```python
+from src.config.experiment_config import get_experiment_config
+
+# 8B with both probes
+config = get_experiment_config("8b_both")
+
+# 8B with deception only
+config = get_experiment_config("8b_deception")
+
+# 8B with hallucination only
+config = get_experiment_config("8b_hallucination")
+
+# 70B with both probes (requires 70B deployment)
+config = get_experiment_config("70b_both")
+```
+
+See `src/config/experiment_config.py` for all available presets and `examples/` for usage examples.
+
 ## Quick Start
 
 ### Basic Usage
