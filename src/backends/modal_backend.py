@@ -27,6 +27,7 @@ class ModalBackend(LLMBackend):
         probe: Optional[str] = None,
         probes: Optional[List[str]] = None,
         modal_app_name: Optional[str] = None,
+        top_k_logits: int = 0,
         **kwargs,
     ):
         """
@@ -36,6 +37,7 @@ class ModalBackend(LLMBackend):
             probe: Single probe name (backward compat) - converted to list internally
             probes: List of probe names (e.g., ["deception_8b", "hallucination_8b"])
             modal_app_name: Override Modal app name (defaults to probe config)
+            top_k_logits: Number of top logits to return per token (0 = disabled)
             **kwargs: Additional config (unused for now)
         """
         # Convert single probe to list for internal consistency
@@ -45,6 +47,7 @@ class ModalBackend(LLMBackend):
             raise ValueError("Specify either 'probe' or 'probes', not both")
         
         self.probe_names = probes or []
+        self.top_k_logits = top_k_logits
         
         # Get configs for all probes
         self.probe_configs = {}
@@ -63,7 +66,8 @@ class ModalBackend(LLMBackend):
         self.service = None
 
         probe_str = ", ".join(self.probe_names) if self.probe_names else "none"
-        print(f"ModalBackend initialized (app={self.modal_app_name}, probes=[{probe_str}])")
+        logits_str = f", top_k={top_k_logits}" if top_k_logits > 0 else ""
+        print(f"ModalBackend initialized (app={self.modal_app_name}, probes=[{probe_str}]{logits_str})")
 
     def _ensure_connected(self):
         """Lazy connect to Modal service."""
@@ -115,6 +119,7 @@ class ModalBackend(LLMBackend):
             probe_paths=probe_paths,
             max_tokens=max_tokens,
             temperature=temperature,
+            top_k_logits=self.top_k_logits,
         )
 
         if "error" in result:
@@ -122,6 +127,7 @@ class ModalBackend(LLMBackend):
 
         text = result.get("generated_text", "")
         tokens = result.get("generated_tokens")
+        top_k_logits = result.get("top_k_logits")
 
         # Extract probe scores for each probe
         probe_scores = None
@@ -155,7 +161,7 @@ class ModalBackend(LLMBackend):
         return GenerationResult(
             text=text,
             tokens=tokens,
-            top_k_logits=None,
+            top_k_logits=top_k_logits,
             probe_scores=probe_scores,
         )
 
@@ -183,4 +189,4 @@ class ModalBackend(LLMBackend):
 
     @property
     def supports_logits(self) -> bool:
-        return False
+        return self.top_k_logits > 0

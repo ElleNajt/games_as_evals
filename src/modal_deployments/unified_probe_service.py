@@ -213,17 +213,26 @@ class UnifiedProbeService:
         probe_path: str,
         max_tokens: int = 512,
         temperature: float = 0.7,
+        top_k_logits: int = 0,
     ) -> Dict[str, Any]:
         """
         Generate text with per-token probe activations (public API).
         
         This is a wrapper around _generate_with_probe_impl for external calls.
+        
+        Args:
+            messages: Chat messages
+            probe_path: Path to probe on volume
+            max_tokens: Maximum tokens to generate
+            temperature: Sampling temperature
+            top_k_logits: Number of top logits to return per token (0 = disabled)
         """
         return self._generate_with_probe_impl(
             messages=messages,
             probe_path=probe_path,
             max_tokens=max_tokens,
-            temperature=temperature
+            temperature=temperature,
+            top_k_logits=top_k_logits
         )
     
     def _generate_with_probe_impl(
@@ -232,6 +241,7 @@ class UnifiedProbeService:
         probe_path: str,
         max_tokens: int = 512,
         temperature: float = 0.7,
+        top_k_logits: int = 10,
     ) -> Dict[str, Any]:
         """
         Internal implementation of generate_with_probe.
@@ -242,12 +252,14 @@ class UnifiedProbeService:
             probe_path: Path to probe on volume (relative to /models/probes/ or absolute)
             max_tokens: Maximum tokens to generate
             temperature: Sampling temperature
+            top_k_logits: Number of top logits to return per token (0 = disabled)
             
         Returns:
             {
                 "generated_text": str,              # Full generated text
                 "generated_tokens": List[str],      # List of token strings
                 "token_scores": List[float],        # Raw probe score per token (pre-sigmoid)
+                "top_k_logits": List[Dict[str, float]],  # Top-k logits per token (if enabled)
                 "prompt_num_tokens": int,           # Number of prompt tokens
                 "generated_num_tokens": int,        # Number of generated tokens
             }
@@ -272,6 +284,7 @@ class UnifiedProbeService:
                 temperature=temperature,
                 max_tokens=max_tokens,
                 top_p=0.9 if temperature > 0 else 1.0,
+                logprobs=top_k_logits if top_k_logits > 0 else None,
             )
             
             # Get model and target layer
@@ -333,13 +346,31 @@ class UnifiedProbeService:
             generated_tokens = self.tokenizer.convert_ids_to_tokens(generated_ids)
             generated_text = self.tokenizer.decode(generated_ids, skip_special_tokens=True)
             
-            return {
+            # Extract logprobs if requested
+            logits_list = None
+            if top_k_logits > 0 and outputs[0].outputs[0].logprobs:
+                logits_list = []
+                for logprob_dict in outputs[0].outputs[0].logprobs:
+                    if logprob_dict is not None:
+                        # Convert token IDs to strings and logprobs to dict
+                        token_logprobs = {
+                            self.tokenizer.decode([token_id]): logprob.logprob
+                            for token_id, logprob in logprob_dict.items()
+                        }
+                        logits_list.append(token_logprobs)
+            
+            result = {
                 "generated_text": generated_text,
                 "generated_tokens": generated_tokens,
                 "token_scores": token_scores,
                 "prompt_num_tokens": prompt_num_tokens,
                 "generated_num_tokens": len(generated_ids),
             }
+            
+            if logits_list is not None:
+                result["top_k_logits"] = logits_list
+            
+            return result
             
         except Exception as e:
             import traceback
@@ -355,6 +386,7 @@ class UnifiedProbeService:
         probe_paths: Dict[str, str],
         max_tokens: int = 512,
         temperature: float = 0.7,
+        top_k_logits: int = 0,
     ) -> Dict[str, Any]:
         """
         Generate text with multiple probe activations.
@@ -368,11 +400,13 @@ class UnifiedProbeService:
             probe_paths: Dict mapping probe names to volume paths
             max_tokens: Maximum tokens to generate
             temperature: Sampling temperature
+            top_k_logits: Number of top logits to return per token (0 = disabled)
             
         Returns:
             {
                 "generated_text": str,
                 "generated_tokens": List[str],
+                "top_k_logits": List[Dict[str, float]],  # If enabled
                 "probe_results": {
                     "probe_name1": {
                         "token_scores": List[float],
@@ -387,6 +421,7 @@ class UnifiedProbeService:
             probe_results = {}
             generated_text = None
             generated_tokens = None
+            top_k_logits_result = None
             
             # Run each probe separately
             # Note: We need to call the internal implementation directly since we can't
@@ -398,6 +433,7 @@ class UnifiedProbeService:
                     probe_path=probe_path,
                     max_tokens=max_tokens,
                     temperature=temperature,
+                    top_k_logits=top_k_logits,
                 )
                 
                 if "error" in probe_result:
@@ -410,16 +446,22 @@ class UnifiedProbeService:
                     "generated_num_tokens": probe_result["generated_num_tokens"],
                 }
                 
-                # Use text/tokens from first probe
+                # Use text/tokens/logits from first probe
                 if generated_text is None:
                     generated_text = probe_result["generated_text"]
                     generated_tokens = probe_result["generated_tokens"]
+                    top_k_logits_result = probe_result.get("top_k_logits")
             
-            return {
+            result = {
                 "generated_text": generated_text,
                 "generated_tokens": generated_tokens,
                 "probe_results": probe_results,
             }
+            
+            if top_k_logits_result is not None:
+                result["top_k_logits"] = top_k_logits_result
+            
+            return result
             
         except Exception as e:
             import traceback

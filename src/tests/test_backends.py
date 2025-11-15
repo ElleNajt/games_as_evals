@@ -129,15 +129,25 @@ class TestOpenRouterBackend:
 class TestModalBackend:
     """Tests for ModalBackend."""
     
-    def test_init_with_probe(self):
+    def test_init_with_single_probe(self):
         backend = ModalBackend(probe="deception_8b")
-        assert backend.probe_name == "deception_8b"
-        assert backend.probe_config is not None
-        assert backend.modal_app_name == "werewolf-apollo-probe"
+        assert backend.probe_names == ["deception_8b"]
+        assert "deception_8b" in backend.probe_configs
+        assert backend.modal_app_name == "unified-probe-service"
     
-    def test_init_without_probe_or_app_fails(self):
-        with pytest.raises(ValueError, match="modal_app_name must be provided"):
-            ModalBackend()
+    def test_init_with_multiple_probes(self):
+        backend = ModalBackend(probes=["deception_8b", "hallucination_8b"])
+        assert backend.probe_names == ["deception_8b", "hallucination_8b"]
+        assert len(backend.probe_configs) == 2
+    
+    def test_init_with_logits(self):
+        backend = ModalBackend(probe="deception_8b", top_k_logits=10)
+        assert backend.top_k_logits == 10
+    
+    def test_init_without_probes(self):
+        backend = ModalBackend()
+        assert backend.probe_names == []
+        assert backend.modal_app_name == "unified-probe-service"
     
     def test_init_with_explicit_app_name(self):
         backend = ModalBackend(probe="deception_8b", modal_app_name="custom-app")
@@ -148,11 +158,15 @@ class TestModalBackend:
         assert backend.supports_probes == True
     
     def test_supports_probes_without_probe(self):
-        backend = ModalBackend(modal_app_name="test-app")
+        backend = ModalBackend()
         assert backend.supports_probes == False
     
-    def test_supports_logits(self):
-        backend = ModalBackend(probe="deception_8b")
+    def test_supports_logits_enabled(self):
+        backend = ModalBackend(probe="deception_8b", top_k_logits=10)
+        assert backend.supports_logits == True
+    
+    def test_supports_logits_disabled(self):
+        backend = ModalBackend(probe="deception_8b", top_k_logits=0)
         assert backend.supports_logits == False
 
 
@@ -171,7 +185,24 @@ class TestBackendFactory:
     def test_create_modal_with_probe(self):
         backend = create_backend("modal", probe="deception_8b")
         assert isinstance(backend, ModalBackend)
-        assert backend.probe_name == "deception_8b"
+        assert backend.probe_names == ["deception_8b"]
+    
+    def test_create_modal_with_probes_list(self):
+        backend = create_backend("modal", probes=["deception_8b", "hallucination_8b"])
+        assert isinstance(backend, ModalBackend)
+        assert backend.probe_names == ["deception_8b", "hallucination_8b"]
+    
+    def test_create_modal_with_logits(self):
+        backend = create_backend("modal", probe="deception_8b", top_k_logits=10)
+        assert isinstance(backend, ModalBackend)
+        assert backend.top_k_logits == 10
+        assert backend.supports_logits == True
+    
+    def test_create_modal_with_default_probes(self):
+        backend = create_backend("modal", model="meta-llama/Meta-Llama-3.1-8B-Instruct")
+        assert isinstance(backend, ModalBackend)
+        assert "deception_8b" in backend.probe_names
+        assert "hallucination_8b" in backend.probe_names
     
     def test_create_unknown_backend(self):
         with pytest.raises(ValueError, match="Unknown backend type"):

@@ -19,6 +19,7 @@ def create_backend(
     model: str = None,
     probe: str = None,
     probes: list = None,
+    top_k_logits: int = 0,
     **kwargs
 ) -> LLMBackend:
     """
@@ -30,6 +31,8 @@ def create_backend(
         probe: Single probe name (backward compat) - converted to list internally
         probes: List of probe names (overrides defaults)
                Only used for Modal backend.
+        top_k_logits: Number of top logits to return per token (0 = disabled)
+                     Only used for Modal backend.
         **kwargs: Backend-specific configuration
         
     Returns:
@@ -45,8 +48,8 @@ def create_backend(
         >>> # Modal with specific single probe (backward compat)
         >>> backend = create_backend("modal", model="...", probe="deception_8b")
         
-        >>> # Modal with specific probe list
-        >>> backend = create_backend("modal", model="...", probes=["hallucination_8b"])
+        >>> # Modal with specific probe list and logits
+        >>> backend = create_backend("modal", model="...", probes=["hallucination_8b"], top_k_logits=10)
     """
     if backend_type == "claude":
         return ClaudeBackend()
@@ -71,6 +74,7 @@ def create_backend(
         return ModalBackend(
             probes=probes,
             modal_app_name=kwargs.get("modal_app_name"),
+            top_k_logits=top_k_logits,
             **kwargs
         )
     
