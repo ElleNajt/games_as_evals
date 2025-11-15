@@ -477,12 +477,39 @@ class UnifiedProbeService:
         max_tokens: int = 512,
         temperature: float = 0.7,
     ) -> Dict[str, Any]:
-        """Alias for generate_without_probe for backward compatibility."""
-        return self.generate_without_probe(
-            messages=messages,
-            max_tokens=max_tokens,
-            temperature=temperature
-        )
+        """Generate without probe scoring (faster). Alias for backward compatibility."""
+        from vllm import SamplingParams
+        
+        try:
+            # Sampling parameters
+            sampling_params = SamplingParams(
+                temperature=temperature,
+                max_tokens=max_tokens,
+                top_p=0.9 if temperature > 0 else 1.0,
+            )
+            
+            # Format prompt
+            prompt = self.tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=True
+            )
+            
+            # Generate
+            outputs = self.llm.generate(
+                prompts=[prompt],
+                sampling_params=sampling_params,
+                use_tqdm=False
+            )
+            
+            generated_text = outputs[0].outputs[0].text
+            
+            return {
+                "generated_text": generated_text,
+            }
+            
+        except Exception as e:
+            return {"error": f"Generation failed: {str(e)}"}
     
     @modal.method()
     def generate_without_probe(
