@@ -81,6 +81,19 @@ PROBE_REGISTRY = {
         gpu_count=1,
         estimated_memory_gb=20
     ),
+    
+    "hallucination_70b": ProbeConfig(
+        probe_name="hallucination_70b",
+        volume_path="hallucination_70b_layer30",  # Path on Modal volume
+        probe_type="hallucination",
+        model_name="meta-llama/Llama-3.3-70B-Instruct",
+        layer=30,
+        description="70B hallucination probe for Two Truths and a Lie",
+        modal_app_name="unified-probe-service",
+        gpu_type="H100",
+        gpu_count=4,
+        estimated_memory_gb=320  # 4x 80GB H100s
+    ),
 }
 
 

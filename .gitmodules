@@ -1,0 +1,3 @@
+[submodule "external_repos/hallucination_probes"]
+	path = external_repos/hallucination_probes
+	url = https://github.com/ElleNajt/hallucination_probes.git
