@@ -1,14 +1,29 @@
-# Unified Backend System for LLM Games
+# LLM Games with Deception Detection
 
-A unified backend abstraction layer for LLM-based games with optional probe integration for deception and hallucination detection.
+A research framework for running LLM-based games with integrated deception and hallucination detection probes. Provides a unified backend abstraction supporting multiple LLM providers (Claude, OpenRouter, Modal) with optional probe scoring and logit extraction.
 
 ## Overview
 
-This package provides:
-- **Unified interface** for multiple LLM backends (Claude, OpenRouter, Modal)
-- **Probe integration** for deception/hallucination detection via Modal
-- **Simple player abstraction** (`GamePlayer`) that works across all backends
-- **Display helpers** for showing probe scores to players
+This framework enables:
+- **Unified LLM interface** across Claude, OpenRouter, and Modal backends
+- **Probe integration** for real-time deception and hallucination detection
+- **Top-k logits extraction** for analyzing model uncertainty
+- **Automatic logging** of all interactions with full metadata (tokens, probes, logits, timestamps)
+- **Game implementations** for studying strategic deception
+
+### Implemented Games
+
+1. **Werewolf** - Social deduction game where players must identify hidden werewolves
+   - Roles: Villagers, Werewolves, Seer
+   - Phases: Night (werewolf selection), Day (discussion and voting)
+   - Probe usage: Detect deceptive statements during discussions
+   - Located in: `src/games/werewolf/`
+
+2. **Two Truths and a Lie (TTL)** - Deceiver generates mixed true/false statements, auditor identifies the lie
+   - Roles: Deceiver, Auditor
+   - Modes: Real-world facts or given fact set
+   - Probe usage: Hallucination detection on generated statements
+   - Located in: `src/games/ttl/`
 
 ## Installation
 
@@ -20,23 +35,22 @@ pip install -r requirements.txt
 
 **Claude Backend:**
 ```bash
-# Install Claude CLI
-# See: https://github.com/anthropics/claude-cli
+# Install Claude CLI (https://github.com/anthropics/claude-cli)
+# Then use directly - no additional setup needed
 ```
 
 **OpenRouter Backend:**
 ```bash
-# Set API key
 export OPENROUTER_API_KEY="your-key-here"
 ```
 
-**Modal Backend:**
+**Modal Backend (for probes + logits):**
 ```bash
 # Login to Modal
 modal setup
 
-# Ensure probe deployments are running
-# (werewolf-apollo-probe, hallucination-probe-backend, etc.)
+# Deploy the unified probe service
+modal deploy src/modal_deployments/unified_probe_service.py
 ```
 
 ## Quick Start
@@ -44,7 +58,8 @@ modal setup
 ### Basic Usage
 
 ```python
-from games_as_evals import GamePlayer, create_backend
+from src.backends import create_backend
+from src.player import GamePlayer
 
 # Create a backend
 backend = create_backend("claude")  # or "openrouter", "modal"
@@ -53,113 +68,208 @@ backend = create_backend("claude")  # or "openrouter", "modal"
 alice = GamePlayer(
     name="Alice",
     backend=backend,
-    system_prompt="You are Alice, a strategic 3-SAT player."
+    system_prompt="You are Alice, a strategic player."
 )
 
-# Query the player
-result = alice.query("What's your move?")
+# Generate response
+result = alice.query("What's your strategy?")
 print(result.text)
 ```
 
-### With Probe Support
+### With Probes and Logits (Modal only)
 
 ```python
-from games_as_evals import GamePlayer, create_backend
-from games_as_evals.probes import format_probe_annotation
+from src.backends import create_backend
+from src.player import GamePlayer
 
-# Create Modal backend with deception probe
-backend = create_backend("modal", probe="deception_8b")
+# Create Modal backend with deception probe and logits
+backend = create_backend(
+    "modal",
+    probe="deception_8b",
+    top_k_logits=10
+)
 
 alice = GamePlayer("Alice", backend, "You are a strategic player.")
 
-# Generate response
-result = alice.query("Will you help me win?")
+# Generate response with probe scoring
+result = alice.query("I'm definitely telling the truth.")
 
-# Check probe scores
-if result.probe_scores:
-    print(f"Deception score: {result.probe_scores.aggregate_score:.2f}")
-    
-    # Format for display to other players
-    annotated = format_probe_annotation(
-        "Alice",
-        result.text,
-        result.probe_scores,
-        style="inline"  # "I'll help you [PROBE: HIGH]"
-    )
+# Access all data
+print(f"Response: {result.text}")
+print(f"Tokens: {result.tokens}")
+print(f"Deception score: {result.probe_scores['deception_8b'].aggregate_score:.3f}")
+print(f"Top alternatives for first token: {result.top_k_logits[0]}")
 ```
 
-## API Reference
+### With Automatic Logging
 
-### Backends
+```python
+from src.backends import create_backend
+from src.player import GamePlayer
+from src.result_logging import ResultsLogger
+from src.config import GameConfig
 
-**`create_backend(backend_type, **kwargs)`**
+# Setup logging
+config = GameConfig(output_dir="results/my_experiment")
+logger = ResultsLogger(config, game_name="werewolf", experiment_base="test")
 
-Create a backend instance.
+# Create player with logger
+backend = create_backend("modal", probe="deception_8b", top_k_logits=10)
+alice = GamePlayer("Alice", backend, logger=logger)
 
-- `backend_type`: `"claude"`, `"openrouter"`, or `"modal"`
-- For OpenRouter: `model="meta-llama/llama-3.1-70b-instruct"`
-- For Modal: `probe="deception_8b"` or `"hallucination_8b"`
+# All queries are automatically logged to messages.jsonl
+result = alice.query("What's your move?")
 
-### GamePlayer
+# Logs include: timestamp, player, prompt, response, tokens, probe_scores, top_k_logits
+```
 
-**`GamePlayer(name, backend, system_prompt="")`**
+## Backend Comparison
 
-Unified player abstraction.
-
-**`player.query(prompt, max_tokens=512, temperature=0.7)`**
-
-Generate a response. Returns `GenerationResult`:
-- `text`: Generated text (always present)
-- `tokens`: Token list (Modal only, else `None`)
-- `top_k_logits`: Top-k logits (Modal only, else `None`)  
-- `probe_scores`: Probe scores (Modal with probe only, else `None`)
-
-### Probe Display
-
-**`format_probe_annotation(speaker, text, probe_scores, style)`**
-
-Format probe scores for display:
-- `style="inline"`: `"Statement [PROBE: HIGH]"` (3-SAT style)
-- `style="summary"`: `"[LIE DETECTOR] Alice: 0.75"` (Werewolf style)
-- `style="none"`: No annotation
-
-**`categorize_score(score, all_scores=None)`**
-
-Categorize score as `"LOW"`, `"MED"`, or `"HIGH"`.
+| Feature | Claude | OpenRouter | Modal |
+|---------|--------|------------|-------|
+| **Returns text** | ✅ | ✅ | ✅ |
+| **Returns tokens** | ❌ | ❌ | ✅ |
+| **Probe scores** | ❌ | ❌ | ✅ |
+| **Top-k logits** | ❌ | ❌ | ✅ |
+| **Auto logging** | ✅ | ✅ | ✅ |
+| **Use case** | Quick testing | Many models | Research |
+| **Cost** | API cost | API cost | GPU time |
 
 ## Available Probes
 
-| Probe Name | Type | Model | Description |
-|------------|------|-------|-------------|
-| `deception_8b` | Deception | Llama 3.1 8B | Apollo roleplaying probe (Werewolf/3-SAT) |
-| `deception_70b` | Deception | Llama 3.3 70B | Apollo roleplaying probe (Werewolf) |
-| `hallucination_8b` | Hallucination | Llama 3.1 8B | Hallucination detection (Two Truths and a Lie) |
-
-### Probe Score Format
-
-**All probe scores are probabilities in the range [0, 1]** after sigmoid transformation:
+All probes return scores in the range `[0, 1]` after sigmoid transformation:
 - **0.0** = Very low deception/hallucination (truthful/factual)
 - **0.5** = Neutral/uncertain
-- **1.0** = Very high deception/hallucination (deceptive/false)
+- **1.0** = Very high deception/hallucination
 
-The unified backend automatically applies sigmoid transformation to ensure consistency:
-- **Deception probes** (Apollo): Raw logits → `sigmoid(logits)` → probabilities
-- **Hallucination probes**: Already return probabilities, sigmoid is safely re-applied
+| Probe Name | Type | Model | Layer | Description |
+|------------|------|-------|-------|-------------|
+| `deception_8b` | Deception | Llama 3.1 8B | 12 | Apollo roleplaying probe |
+| `deception_70b` | Deception | Llama 3.3 70B | 22 | Apollo roleplaying probe |
+| `hallucination_8b` | Hallucination | Llama 3.1 8B | 12 | Factual accuracy detection |
 
-This ensures all probe scores have the same interpretation across different probe types.
+### Multi-Probe Support
 
-## Testing
+```python
+# Use multiple probes simultaneously
+backend = create_backend(
+    "modal",
+    probes=["deception_8b", "hallucination_8b"],
+    top_k_logits=10
+)
 
-Run tests:
-```bash
-# All tests
-pytest src/tests/
+result = backend.generate(
+    messages=[{"role": "user", "content": "Tell me something."}]
+)
 
-# Specific test file
-pytest src/tests/test_backends.py -v
+# Access individual probe scores
+print(result.probe_scores["deception_8b"].aggregate_score)
+print(result.probe_scores["hallucination_8b"].aggregate_score)
+```
 
-# Skip slow integration tests
-pytest -m "not slow"
+## Game Examples
+
+### Running Werewolf
+
+```python
+from src.games.werewolf import WerewolfConfig, GameCoordinator
+
+# Configure game
+config = WerewolfConfig(
+    num_players=5,
+    num_werewolves=2,
+    backend_type="modal",
+    probe="deception_8b",
+    top_k_logits=10,
+    show_probe_scores=True  # Display probe annotations to players
+)
+
+# Run game
+coordinator = GameCoordinator(config, experiment_name="test_game")
+results = coordinator.run_game()
+
+# Results logged to: results/werewolf/{experiment_name}/
+print(f"Winner: {results['winner']}")
+print(f"Final state: {results['final_state']}")
+```
+
+### Running Two Truths and a Lie
+
+```python
+from src.games.ttl import TTLConfig
+from src.games.ttl.orchestrator_unified import run_game_round
+
+# Configure game
+config = TTLConfig(
+    deceiver_backend="modal",
+    auditor_backend="modal",
+    deceiver_probe="deception_8b",
+    auditor_probe="hallucination_8b",
+    top_k_logits=10
+)
+
+# Run round
+results = run_game_round(
+    config=config,
+    facts=["The sky is blue", "Water freezes at 0°C", "Earth orbits the sun"],
+    experiment_name="ttl_test",
+    round_id=1
+)
+
+# Results logged to: results/ttl/ttl_test/round1/
+print(f"Auditor guessed correctly: {results['auditor_correct']}")
+print(f"Deceiver statements: {results['statements']}")
+```
+
+## Logging System
+
+All player interactions are automatically logged to JSONL files with full metadata.
+
+### Log Structure
+
+```
+results/
+└── {game_name}/
+    └── {experiment_name}/
+        ├── config.json          # Complete game configuration
+        ├── messages.jsonl       # All player messages
+        ├── events.jsonl         # Game events
+        └── results.json         # Final results
+```
+
+### Message Log Format
+
+Each line in `messages.jsonl` contains:
+
+```json
+{
+  "timestamp": "2025-11-15T21:15:39Z",
+  "player_name": "Alice",
+  "role": "assistant",
+  "prompt": "What's your strategy?",
+  "response": "I think we should vote for Bob.",
+  "tokens": ["I", " think", " we", ...],
+  "top_k_logits": [
+    {"I": -0.5, "My": -1.2, "We": -2.1},
+    ...
+  ],
+  "probe_scores": {
+    "deception_8b": {
+      "aggregate_score": 0.734,
+      "token_scores": [0.1, 0.8, 0.9, ...],
+      "metadata": {
+        "num_tokens": 15,
+        "probe_type": "deception",
+        "layer": 12
+      }
+    }
+  },
+  "metadata": {
+    "max_tokens": 512,
+    "temperature": 0.7,
+    "system_prompt": "You are Alice..."
+  }
+}
 ```
 
 ## Architecture
@@ -168,12 +278,9 @@ pytest -m "not slow"
 
 ```
 LLMBackend (ABC)
-├── ClaudeBackend
-│   └── Returns: text only
-├── OpenRouterBackend  
-│   └── Returns: text only
-└── ModalBackend
-    └── Returns: text + tokens + probe_scores
+├── ClaudeBackend          → Returns: text
+├── OpenRouterBackend      → Returns: text
+└── ModalBackend           → Returns: text + tokens + probes + logits
 ```
 
 ### Data Flow
@@ -181,71 +288,105 @@ LLMBackend (ABC)
 ```
 GamePlayer.query(prompt)
     ↓
-backend.generate(messages)
+backend.generate(messages, max_tokens, temperature)
+    ↓
+[Modal: vLLM inference + probe scoring + logit extraction]
     ↓
 GenerationResult(
     text="...",
-    tokens=[...],        # Modal only
-    probe_scores=...     # Modal with probe only
+    tokens=["I", " think", ...],           # Modal only
+    top_k_logits=[{...}, {...}],           # Modal only (if enabled)
+    probe_scores={"deception_8b": ...}     # Modal only (if probe specified)
 )
+    ↓
+ResultsLogger.log_message(...)  # Automatic logging to JSONL
 ```
 
-## Example: 3-SAT Game Integration
+## API Reference
 
+See [API_SUMMARY.md](API_SUMMARY.md) for complete API documentation including:
+- Detailed `create_backend()` parameters
+- `GamePlayer` interface
+- `GenerationResult` structure
+- Probe configuration
+- Modal service architecture
+- Performance metrics
+
+## Testing
+
+```bash
+# Run all tests
+pytest src/tests/
+
+# Specific test file
+pytest src/tests/test_backends.py -v
+
+# Test logits functionality
+pytest src/tests/test_logits.py -v
+
+# Skip slow integration tests
+pytest -m "not slow"
+```
+
+## Adding New Probes
+
+1. Train probe and export weights (`.pt` for Apollo format or `.bin` + `.json` for Hallucination format)
+
+2. Upload to Modal volume:
+```bash
+modal volume put probes-volume local_probe.pt /probes/my_probe.pt
+```
+
+3. Register in `src/backends/modal_backend.py`:
 ```python
-from games_as_evals import GamePlayer, create_backend
-from games_as_evals.probes import format_probe_annotation, categorize_score
+PROBE_PATHS = {
+    "my_probe": "/probes/my_probe.pt",
+    # ... existing probes
+}
+```
 
-# Setup
-backend = create_backend("modal", probe="deception_8b")
-alice = GamePlayer("Alice", backend, "You are Alice, a strategic 3-SAT player...")
+4. Use in games:
+```python
+backend = create_backend("modal", probe="my_probe")
+```
 
-# Negotiation phase
-conversation_history = [...]
-all_probe_scores = []
+## Project Structure
 
-prompt = f"{game_state}\n\nConversation:\n{conversation_history}\n\nYour response:"
-result = alice.query(prompt, max_tokens=200)
-
-# Display to other players (with probe annotation)
-if result.probe_scores:
-    all_probe_scores.append(result.probe_scores.aggregate_score)
-    
-    annotated = format_probe_annotation(
-        "Alice",
-        result.text,
-        result.probe_scores,
-        style="inline",
-        all_scores=all_probe_scores  # For adaptive thresholds
-    )
-    print(annotated)  # "I'll set x3=True [PROBE: HIGH]"
-else:
-    print(result.text)
+```
+src/
+├── backends/              # Backend implementations
+│   ├── base.py           # Abstract base class
+│   ├── claude.py         # Claude CLI backend
+│   ├── openrouter.py     # OpenRouter API backend
+│   └── modal_backend.py  # Modal + probes + logits backend
+├── games/                # Game implementations
+│   ├── werewolf/         # Werewolf game
+│   └── ttl/              # Two Truths and a Lie
+├── modal_deployments/    # Modal service deployments
+│   └── unified_probe_service.py  # vLLM + probe scoring service
+├── config/               # Configuration classes
+├── player.py             # GamePlayer abstraction
+├── result_logging/       # Logging infrastructure
+└── tests/                # Test suite
 ```
 
 ## Design Principles
 
-1. **Single unified pattern**: All games use the same `GamePlayer` interface
-2. **Null handling**: Non-Modal backends return `None` for unsupported features
-3. **Game logic stays in games**: This package only handles LLM queries and probe scoring
-4. **Flexible display**: Games choose how to format probe scores for their context
+1. **Unified interface** - All backends use the same `LLMBackend` abstract class
+2. **Null handling** - Non-Modal backends return `None` for unsupported features (probes, logits)
+3. **Automatic logging** - All interactions logged by default with full metadata
+4. **Game-agnostic** - Backend system works for any game, not just Werewolf/TTL
+5. **Reproducibility** - Config and git hashes tracked for all experiments
 
 ## Contributing
 
-When adding new probes:
+When adding new games:
 
-1. Deploy probe service to Modal
-2. Add config to `src/probes/registry.py`:
-```python
-PROBE_REGISTRY["new_probe"] = ProbeConfig(
-    probe_id="...",
-    probe_type="deception",  # or "hallucination"
-    model_name="...",
-    layer=22,
-    modal_app_name="...",
-    description="..."
-)
-```
+1. Create directory in `src/games/{game_name}/`
+2. Implement game coordinator using `GamePlayer` interface
+3. Add configuration class inheriting from `GameConfig`
+4. Use `ResultsLogger` for automatic logging
+5. Add tests in `src/tests/`
 
 ## License
 
