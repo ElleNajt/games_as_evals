@@ -62,7 +62,7 @@ def run_game_round(
     deceiver_backend = create_backend(
         backend_type=config.deceiver_config.backend_type,
         model=config.deceiver_config.model,
-        probe=config.deceiver_config.probe
+        probes=config.deceiver_config.probes
     )
     deceiver = GamePlayer(
         name=config.deceiver_config.name,
@@ -71,8 +71,8 @@ def run_game_round(
         logger=logger
     )
     print(f"Deceiver: {config.deceiver_config.backend_type} backend")
-    if config.deceiver_config.probe:
-        print(f"  Probe: {config.deceiver_config.probe}")
+    if config.deceiver_config.probes:
+        print(f"  Probes: {', '.join(config.deceiver_config.probes)}")
     
     # Step 1: Deceiver generates statements
     print(f"\n{'─' * 80}")
@@ -170,7 +170,7 @@ def run_game_round(
         auditor_backend = create_backend(
             backend_type=config.auditor_config.backend_type,
             model=config.auditor_config.model,
-            probe=config.auditor_config.probe
+            probes=config.auditor_config.probes
         )
         auditor = GamePlayer(
             name=config.auditor_config.name,

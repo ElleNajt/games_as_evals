@@ -109,7 +109,7 @@ class GameCoordinator:
                 backend = create_backend(
                     backend_type=player_config.backend_type,
                     model=player_config.model,
-                    probe=player_config.probe
+                    probes=player_config.probes
                 )
                 
                 # Create GamePlayer with logger
