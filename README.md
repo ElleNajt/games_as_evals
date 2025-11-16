@@ -49,9 +49,52 @@ export OPENROUTER_API_KEY="your-key-here"
 # Login to Modal
 modal setup
 
-# Deploy the unified probe service
+# Deploy the unified probe service (8B)
 modal deploy src/modal_deployments/unified_probe_service.py
+
+# (Optional) Deploy 70B service if you need 70B probes
+modal deploy src/modal_deployments/unified_probe_service_70b.py
+
+# (Recommended) Cache the 70B model to avoid repeated downloads
+# This downloads ~140GB once and stores it on the Modal volume
+# Saves 10-15 minutes on every subsequent deployment
+modal run src/modal_deployments/unified_probe_service_70b.py::download_model_to_volume
 ```
+
+**70B Model Caching:**
+
+The 70B model is large (~140GB) and takes 10-15 minutes to download on each cold start. To optimize this:
+
+1. **One-time caching** (recommended):
+   ```bash
+   modal run src/modal_deployments/unified_probe_service_70b.py::download_model_to_volume
+   ```
+   This downloads the model once to `/volume/models/huggingface/` on the Modal volume.
+
+2. **Automatic detection**: The 70B service automatically checks for the cached model on startup:
+   - If cached model exists → loads from volume (fast startup)
+   - If not cached → downloads from HuggingFace (slower, but saves to cache for next time)
+
+3. **No configuration needed**: The caching is transparent - just deploy and run. The first run without cache downloads the model, all subsequent runs use the cached version.
+
+### Setting Up Probes
+
+The 8B probes (`deception_8b` and `hallucination_8b`) are already uploaded to Modal. For 70B probes, you need to download and upload them first:
+
+```bash
+# Download 70B probes from HuggingFace and external repos
+python probes/setup_70b_probes.py
+
+# Upload to Modal volume
+python probes/setup_70b_probes.py --upload-to-modal
+```
+
+This script:
+- Downloads the hallucination 70B probe from HuggingFace (`obalcells/hallucination-probes`)
+- Copies the deception 70B probe from `external_repos/deception-detection`
+- Uploads both to the Modal volume at `/probes/deception_70b_layer22` and `/probes/hallucination_70b_layer30`
+
+**Note:** You only need to run this once per Modal account. The probes are stored persistently in the Modal volume.
 
 ## Running Experiments
 
