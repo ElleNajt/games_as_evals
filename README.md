@@ -471,6 +471,22 @@ src/
 4. **Game-agnostic** - Backend system works for any game, not just Werewolf/TTL
 5. **Reproducibility** - Config and git hashes tracked for all experiments
 
+## Training Custom Probes
+
+Want to train your own probes for new behaviors or models? See the comprehensive guide:
+
+**[docs/PROBE_TRAINING.md](docs/PROBE_TRAINING.md)**
+
+This guide covers:
+- Training deception probes using the `external_repos/deception-detection/` codebase
+- Training hallucination probes using the `external_repos/hallucination_probes/` codebase
+- Choosing the right layer for your probe
+- Creating training datasets with contrasting conditions
+- Exporting and integrating custom probes into this repository
+- Troubleshooting common issues
+
+Pre-trained probes are available for Llama-3.3-8B and Llama-3.3-70B models.
+
 ## Contributing
 
 When adding new games:
