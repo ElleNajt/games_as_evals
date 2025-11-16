@@ -1,3 +1,6 @@
 [submodule "external_repos/hallucination_probes"]
 	path = external_repos/hallucination_probes
 	url = https://github.com/ElleNajt/hallucination_probes.git
+[submodule "external_repos/deception-detection"]
+	path = external_repos/deception-detection
+	url = https://github.com/ApolloResearch/deception-detection.git

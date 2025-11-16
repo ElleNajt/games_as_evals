@@ -23,6 +23,7 @@ TIMEOUT = 30 * 60  # 30 minutes (longer for 70B)
 VOLUME = modal.Volume.from_name("unified-probe-models", create_if_missing=False)
 VOLUME_PATH = "/volume"  # Mount volume at /volume, it contains models/ subdirectory
 PROBES_DIR = Path(VOLUME_PATH) / "models" / "probes"
+MODEL_CACHE_DIR = Path(VOLUME_PATH) / "models" / "huggingface"  # HuggingFace model cache
 
 # Load HF token for accessing Llama models
 if modal.is_local():
@@ -51,6 +52,42 @@ image = (
 )
 
 app = modal.App("unified-probe-service-70b", image=image)
+
+
+@app.function(
+    image=image,
+    volumes={VOLUME_PATH: VOLUME},
+    secrets=[LOCAL_HF_TOKEN_SECRET],
+    timeout=3600,  # 1 hour for download
+)
+def download_model_to_volume(model_name: str = DEFAULT_MODEL):
+    """
+    Download model to volume once for caching.
+    
+    Run this once with: modal run unified_probe_service_70b.py::download_model_to_volume
+    """
+    from huggingface_hub import snapshot_download
+    import os
+    
+    cache_dir = MODEL_CACHE_DIR / model_name.replace("/", "--")
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    
+    print(f"Downloading {model_name} to {cache_dir}...")
+    print(f"This will take ~10-15 minutes for 70B model (~140GB)")
+    
+    snapshot_download(
+        repo_id=model_name,
+        local_dir=str(cache_dir),
+        local_dir_use_symlinks=False,
+        token=os.environ.get("HF_TOKEN"),
+    )
+    
+    # Commit volume changes
+    VOLUME.commit()
+    print(f"✓ Model cached at {cache_dir}")
+    print(f"Volume committed. Model will be available for all future deployments.")
+    
+    return str(cache_dir)
 
 
 def load_probe_from_volume(probe_path: Path):
@@ -167,24 +204,37 @@ class UnifiedProbeService:
         # Initialize cache
         self.loaded_probes = {}
         
+        # Check if model is cached on volume
+        model_cache_path = MODEL_CACHE_DIR / self.model_name.replace("/", "--")
+        
+        if model_cache_path.exists():
+            print(f"✓ Loading from cached model at {model_cache_path}")
+            model_to_load = str(model_cache_path)
+            download_dir = None
+        else:
+            print(f"⚠ Model not cached, will download from HuggingFace")
+            print(f"  Run 'modal run unified_probe_service_70b.py::download_model_to_volume' to cache the model")
+            model_to_load = self.model_name
+            download_dir = str(MODEL_CACHE_DIR)
+        
         # Initialize vLLM with tensor parallelism for 70B
         self.llm = LLM(
-            model=self.model_name,
+            model=model_to_load,
             gpu_memory_utilization=0.90,
             max_model_len=8192,
             trust_remote_code=True,
             enforce_eager=True,  # Required for hooks
-            download_dir=str(Path(VOLUME_PATH) / "models"),
+            download_dir=download_dir,
             tensor_parallel_size=N_GPU,  # 4-way tensor parallelism
         )
         
-        # Load tokenizer
+        # Load tokenizer (use cached path if available)
         self.tokenizer = AutoTokenizer.from_pretrained(
-            self.model_name,
+            model_to_load,
             token=os.environ.get("HF_TOKEN")
         )
         
-        print("70B Model loaded successfully!")
+        print("✓ 70B Model loaded successfully!")
     
     def _load_probe_if_needed(self, probe_path: str):
         """Load probe from volume if not already cached."""
