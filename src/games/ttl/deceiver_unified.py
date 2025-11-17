@@ -43,22 +43,25 @@ def parse_statements(text: str) -> List[str]:
 
 def calculate_statement_scores(
     tokens: List[str],
-    token_scores: List[float],
+    probe_scores_dict: Dict[str, List[float]],
     num_statements: int = 3
-) -> Dict[int, float]:
+) -> Dict[str, Dict[int, float]]:
     """
-    Calculate average probe score for each statement.
+    Calculate average probe score for each statement, separately for each probe.
     
     Finds statement boundaries by looking for digit tokens ("1", "2", "3").
     Based on the original TTL implementation.
     
     Args:
         tokens: List of generated tokens
-        token_scores: List of probe scores per token (already sigmoid-transformed [0,1])
+        probe_scores_dict: Dict mapping probe name to list of token scores
+                          e.g., {"deception_8b": [...], "hallucination_8b": [...]}
         num_statements: Expected number of statements (default 3)
         
     Returns:
-        Dict mapping statement number (1-3) to average score
+        Dict mapping probe name to dict of statement scores
+        e.g., {"deception_8b": {1: 0.82, 2: 0.65, 3: 0.71},
+               "hallucination_8b": {1: 0.71, 2: 0.59, 3: 0.68}}
     """
     # Find positions of statement number tokens (1, 2, 3)
     # Only look for the first num_statements digits to avoid false positives
@@ -70,22 +73,26 @@ def calculate_statement_scores(
             if stmt_num == len(boundaries) + 1:  # Must be sequential
                 boundaries.append(i)
     
-    # Calculate average score for each statement
-    avg_scores = {}
-    for stmt_num in range(1, len(boundaries) + 1):
-        if stmt_num - 1 < len(boundaries):
-            start_idx = boundaries[stmt_num - 1]
-            end_idx = boundaries[stmt_num] if stmt_num < len(boundaries) else len(tokens)
-            
-            statement_scores = token_scores[start_idx:end_idx]
-            if statement_scores:
-                avg_scores[stmt_num] = sum(statement_scores) / len(statement_scores)
+    # Calculate average score for each statement, for each probe
+    result = {}
+    for probe_name, token_scores in probe_scores_dict.items():
+        avg_scores = {}
+        for stmt_num in range(1, len(boundaries) + 1):
+            if stmt_num - 1 < len(boundaries):
+                start_idx = boundaries[stmt_num - 1]
+                end_idx = boundaries[stmt_num] if stmt_num < len(boundaries) else len(tokens)
+                
+                statement_scores = token_scores[start_idx:end_idx]
+                if statement_scores:
+                    avg_scores[stmt_num] = sum(statement_scores) / len(statement_scores)
+                else:
+                    avg_scores[stmt_num] = 0.0
             else:
                 avg_scores[stmt_num] = 0.0
-        else:
-            avg_scores[stmt_num] = 0.0
+        
+        result[probe_name] = avg_scores
     
-    return avg_scores
+    return result
 
 
 def generate_statements(
@@ -158,19 +165,26 @@ Make them similar in length and difficulty to distinguish. Focus on objective, v
         }
     
     # Calculate probe scores if available
-    avg_scores = {}
-    if result.probe_scores is not None and result.probe_scores.token_scores:
-        avg_scores = calculate_statement_scores(
-            result.tokens or [],
-            result.probe_scores.token_scores,
-        )
+    probe_scores = {}
+    probe_token_scores_dict = {}
+    if result.probe_scores is not None and result.probe_scores.scores:
+        # Extract token scores for each probe
+        for probe_name, score_data in result.probe_scores.scores.items():
+            if score_data.token_scores:
+                probe_token_scores_dict[probe_name] = score_data.token_scores
+        
+        # Calculate statement scores for each probe
+        if probe_token_scores_dict:
+            probe_scores = calculate_statement_scores(
+                result.tokens or [],
+                probe_token_scores_dict,
+            )
     
     return {
         "statements": statements,
-        "avg_scores": avg_scores,
+        "probe_scores": probe_scores,  # Statement-level scores per probe
+        "probe_token_scores": probe_token_scores_dict,  # Token-level scores per probe
         "generated_tokens": result.tokens,
-        "token_scores": result.probe_scores.token_scores if result.probe_scores else None,
-        "aggregate_score": result.probe_scores.aggregate_score if result.probe_scores else None,
         "generated_text": result.text,
         "prompt": prompt,
     }

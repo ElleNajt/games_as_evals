@@ -101,9 +101,14 @@ def run_game_round(
     print("Generated statements (original order):")
     for i, stmt in enumerate(statements, 1):
         score_str = ""
-        if deceiver_gen.get("avg_scores"):
-            score = deceiver_gen["avg_scores"].get(i, 0.0)
-            score_str = f" [probe: {score:.3f}]"
+        if deceiver_gen.get("probe_scores"):
+            # Display scores from all probes
+            probe_strs = []
+            for probe_name, scores in deceiver_gen["probe_scores"].items():
+                score = scores.get(i, 0.0)
+                probe_strs.append(f"{probe_name}: {score:.3f}")
+            if probe_strs:
+                score_str = f" [{', '.join(probe_strs)}]"
         print(f"  {i}. {stmt}{score_str}")
     
     # Shuffle statements so deceiver doesn't know final positions
@@ -114,16 +119,18 @@ def run_game_round(
     
     # Create shuffled statements and probe scores
     shuffled_statements = [statements[indices[i]] for i in range(3)]
-    if deceiver_gen.get("avg_scores"):
+    if deceiver_gen.get("probe_scores"):
         # Map probe scores: shuffled_position gets score from original_position
-        # Defensively handle missing keys
+        # Structure: {probe_name: {shuffled_pos: score}}
         shuffled_probe_scores = {}
-        for shuffled_pos, orig_pos in shuffle_mapping.items():
-            if orig_pos in deceiver_gen["avg_scores"]:
-                shuffled_probe_scores[shuffled_pos] = deceiver_gen["avg_scores"][orig_pos]
-            else:
-                print(f"Warning: Missing probe score for original position {orig_pos}")
-                shuffled_probe_scores[shuffled_pos] = 0.0
+        for probe_name, orig_scores in deceiver_gen["probe_scores"].items():
+            shuffled_probe_scores[probe_name] = {}
+            for shuffled_pos, orig_pos in shuffle_mapping.items():
+                if orig_pos in orig_scores:
+                    shuffled_probe_scores[probe_name][shuffled_pos] = orig_scores[orig_pos]
+                else:
+                    print(f"Warning: Missing {probe_name} score for original position {orig_pos}")
+                    shuffled_probe_scores[probe_name][shuffled_pos] = 0.0
     else:
         shuffled_probe_scores = None
     
@@ -132,8 +139,13 @@ def run_game_round(
     for i, stmt in enumerate(shuffled_statements, 1):
         score_str = ""
         if shuffled_probe_scores:
-            score = shuffled_probe_scores.get(i, 0.0)
-            score_str = f" [probe: {score:.3f}]"
+            # Display scores from all probes
+            probe_strs = []
+            for probe_name, scores in shuffled_probe_scores.items():
+                score = scores.get(i, 0.0)
+                probe_strs.append(f"{probe_name}: {score:.3f}")
+            if probe_strs:
+                score_str = f" [{', '.join(probe_strs)}]"
         print(f"  {i}. {stmt}{score_str}")
     
     # Step 2: Deceiver reveals the lie
