@@ -389,11 +389,10 @@ class UnifiedProbeService:
         top_k_logits: int = 0,
     ) -> Dict[str, Any]:
         """
-        Generate text with multiple probe activations.
+        Generate text with multiple probe activations in a SINGLE generation run.
         
-        NOTE: Currently runs generation N times (once per probe) due to complexity
-        of attaching multiple hooks. With temperature > 0, text may differ slightly
-        between runs. The first probe's generated text is returned.
+        This method registers multiple forward hooks (one per probe) and runs
+        generation ONCE. All probes score the same generated tokens.
         
         Args:
             messages: Chat messages
@@ -417,40 +416,130 @@ class UnifiedProbeService:
                 },
             }
         """
+        from vllm import SamplingParams, TokensPrompt
+        import torch
+        
         try:
-            probe_results = {}
-            generated_text = None
-            generated_tokens = None
-            top_k_logits_result = None
-            
-            # Run each probe separately
-            # Note: We need to call the internal implementation directly since we can't
-            # use .remote() on self methods from within the class
+            # Load all probe heads and their target layers
+            probe_heads = {}
+            probe_layers = {}
             for probe_name, probe_path in probe_paths.items():
-                # Call the internal implementation directly
-                probe_result = self._generate_with_probe_impl(
-                    messages=messages,
-                    probe_path=probe_path,
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                    top_k_logits=top_k_logits,
+                probe_head, probe_layer = self._load_probe_if_needed(probe_path)
+                probe_heads[probe_name] = probe_head
+                probe_layers[probe_name] = probe_layer
+            
+            # Format conversation
+            prompt_token_ids = self.tokenizer.apply_chat_template(
+                messages,
+                tokenize=True,
+                add_generation_prompt=True
+            )
+            prompt_num_tokens = len(prompt_token_ids)
+            
+            # Sampling parameters
+            sampling_params = SamplingParams(
+                temperature=temperature,
+                max_tokens=max_tokens,
+                top_p=0.9 if temperature > 0 else 1.0,
+                logprobs=top_k_logits if top_k_logits > 0 else None,
+            )
+            
+            # Get model
+            model = self.llm.llm_engine.model_executor.driver_worker.model_runner.model
+            
+            # Storage for each probe's scores
+            probe_token_scores = {probe_name: [] for probe_name in probe_paths}
+            first_forward_flags = {probe_name: True for probe_name in probe_paths}
+            
+            # Create activation hooks for each probe
+            hook_handles = []
+            
+            for probe_name, probe_layer in probe_layers.items():
+                probe_head = probe_heads[probe_name]
+                target_layer = model.model.layers[probe_layer]
+                
+                # Create closure that captures probe_name, probe_head
+                def make_hook(pname, phead):
+                    def activation_hook(module, input, output):
+                        """Capture activations and score them."""
+                        nonlocal first_forward_flags, probe_token_scores
+                        
+                        # Skip first forward pass (prompt processing)
+                        if first_forward_flags[pname]:
+                            first_forward_flags[pname] = False
+                            return
+                        
+                        # Extract hidden states
+                        assert len(output) == 2
+                        hidden_states, residual = output
+                        resid_post = hidden_states + residual
+                        
+                        # Score with probe (keep on GPU)
+                        with torch.no_grad():
+                            scores = phead(resid_post).squeeze(-1)
+                            
+                            # Handle batched generation
+                            if scores.numel() == 1:
+                                probe_token_scores[pname].append(scores.item())
+                            else:
+                                # Take last token
+                                probe_token_scores[pname].append(scores[-1].item())
+                    
+                    return activation_hook
+                
+                # Register hook for this probe
+                hook = make_hook(probe_name, probe_head)
+                hook_handle = target_layer.register_forward_hook(hook)
+                hook_handles.append(hook_handle)
+            
+            try:
+                # Generate ONCE with all hooks active
+                outputs = self.llm.generate(
+                    prompts=[TokensPrompt(prompt_token_ids=prompt_token_ids)],
+                    sampling_params=sampling_params,
+                    use_tqdm=False
                 )
                 
-                if "error" in probe_result:
-                    return {"error": f"Probe {probe_name} failed: {probe_result['error']}"}
+                # Extract tokens
+                generated_ids = list(outputs[0].outputs[0].token_ids)
                 
-                # Store probe-specific results
+            finally:
+                # Remove all hooks
+                for hook_handle in hook_handles:
+                    hook_handle.remove()
+            
+            # Fix alignment if needed (EOS token) for each probe
+            for probe_name in probe_paths:
+                token_scores = probe_token_scores[probe_name]
+                if len(token_scores) != len(generated_ids):
+                    if len(token_scores) + 1 == len(generated_ids):
+                        probe_token_scores[probe_name].append(0.0)  # EOS gets neutral score
+            
+            # Decode tokens
+            generated_tokens = self.tokenizer.convert_ids_to_tokens(generated_ids)
+            generated_text = self.tokenizer.decode(generated_ids, skip_special_tokens=True)
+            
+            # Extract logprobs if requested
+            logits_list = None
+            if top_k_logits > 0 and outputs[0].outputs[0].logprobs:
+                logits_list = []
+                for logprob_dict in outputs[0].outputs[0].logprobs:
+                    if logprob_dict is not None:
+                        # Convert token IDs to strings and logprobs to dict
+                        token_logprobs = {
+                            self.tokenizer.decode([token_id]): logprob.logprob
+                            for token_id, logprob in logprob_dict.items()
+                        }
+                        logits_list.append(token_logprobs)
+            
+            # Build probe results
+            probe_results = {}
+            for probe_name in probe_paths:
                 probe_results[probe_name] = {
-                    "token_scores": probe_result["token_scores"],
-                    "prompt_num_tokens": probe_result["prompt_num_tokens"],
-                    "generated_num_tokens": probe_result["generated_num_tokens"],
+                    "token_scores": probe_token_scores[probe_name],
+                    "prompt_num_tokens": prompt_num_tokens,
+                    "generated_num_tokens": len(generated_ids),
                 }
-                
-                # Use text/tokens/logits from first probe
-                if generated_text is None:
-                    generated_text = probe_result["generated_text"]
-                    generated_tokens = probe_result["generated_tokens"]
-                    top_k_logits_result = probe_result.get("top_k_logits")
             
             result = {
                 "generated_text": generated_text,
@@ -458,8 +547,8 @@ class UnifiedProbeService:
                 "probe_results": probe_results,
             }
             
-            if top_k_logits_result is not None:
-                result["top_k_logits"] = top_k_logits_result
+            if logits_list is not None:
+                result["top_k_logits"] = logits_list
             
             return result
             
