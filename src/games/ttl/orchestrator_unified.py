@@ -282,4 +282,9 @@ def run_game_round(
     
     print(f"\nResults saved to: {results_file}")
     
+    # Generate consolidated HTML visualization
+    viz_file = logger.generate_consolidated_visualization()
+    if viz_file:
+        print(f"Visualization saved to: {viz_file}")
+    
     return results

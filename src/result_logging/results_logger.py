@@ -62,6 +62,9 @@ class ResultsLogger:
         # Counter for visualization filenames
         self._viz_counter = 0
         
+        # Accumulated visualization data for consolidated output
+        self._viz_data = []
+        
         # Save config on initialization
         self._save_config()
     
@@ -71,21 +74,29 @@ class ResultsLogger:
     
     def _generate_html_visualization(
         self,
-        tokens: List[str],
-        probe_scores: Dict[str, List[float]],
+        all_messages: List[Dict[str, Any]],
         title: str,
     ) -> str:
-        """Generate HTML visualization of probe activations.
+        """Generate consolidated HTML visualization of probe activations with multi-probe toggle.
         
         Args:
-            tokens: List of generated tokens
-            probe_scores: Dictionary mapping probe names to per-token scores
+            all_messages: List of message data dicts with 'message_num', 'player_name', 'tokens', 'probe_scores'
             title: Title for the visualization
             
         Returns:
-            HTML string with color-coded token visualization
+            HTML string with color-coded token visualization and interactive probe selector
         """
         import html
+        import json
+        
+        if not all_messages:
+            return ""
+        
+        # Collect all unique probe names
+        probe_names = set()
+        for msg in all_messages:
+            probe_names.update(msg['probe_scores'].keys())
+        probe_names = sorted(probe_names)
         
         html_parts = [
             '<!DOCTYPE html>',
@@ -96,10 +107,19 @@ class ResultsLogger:
             '<style>',
             'body { font-family: monospace; padding: 20px; background: #f5f5f5; }',
             'h1 { color: #333; }',
-            '.probe-section { margin: 30px 0; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }',
-            '.probe-name { font-size: 18px; font-weight: bold; margin-bottom: 15px; color: #555; }',
-            '.token-container { line-height: 2.5; }',
-            '.token { padding: 4px 2px; border-radius: 3px; }',
+            '.controls { margin: 20px 0; padding: 15px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }',
+            '.probe-selector { margin: 10px 0; }',
+            '.probe-selector label { margin-right: 20px; cursor: pointer; }',
+            '.probe-selector input[type="radio"] { margin-right: 5px; }',
+            '.message-section { margin: 30px 0; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }',
+            '.message-header { font-size: 16px; font-weight: bold; margin-bottom: 10px; color: #555; border-bottom: 2px solid #eee; padding-bottom: 5px; }',
+            '.token-container { line-height: 2.5; margin-top: 10px; }',
+            '.token { padding: 4px 2px; border-radius: 3px; position: relative; cursor: help; }',
+            '.token .tooltip { display: none; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); margin-bottom: 5px; padding: 8px 12px; background: rgba(0, 0, 0, 0.9); color: white; border-radius: 4px; white-space: nowrap; font-size: 12px; z-index: 1000; pointer-events: none; }',
+            '.token .tooltip::after { content: ""; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 5px solid transparent; border-top-color: rgba(0, 0, 0, 0.9); }',
+            '.token:hover .tooltip { display: block; }',
+            '.tooltip .probe-score { margin: 2px 0; }',
+            '.tooltip .probe-score.selected { font-weight: bold; color: #ffff00; }',
             '.legend { margin: 20px 0; padding: 15px; background: #fafafa; border-radius: 5px; }',
             '.legend-item { display: inline-block; margin-right: 20px; }',
             '.legend-color { display: inline-block; width: 40px; height: 20px; border-radius: 3px; vertical-align: middle; margin-right: 5px; }',
@@ -107,48 +127,123 @@ class ResultsLogger:
             '</head>',
             '<body>',
             f'<h1>{html.escape(title)}</h1>',
+            
             '<div class="legend">',
             '<strong>Color scale:</strong> ',
             '<span class="legend-item"><span class="legend-color" style="background: #00ff00;"></span>Low (0.0)</span>',
             '<span class="legend-item"><span class="legend-color" style="background: #ffff00;"></span>Medium (0.5)</span>',
             '<span class="legend-item"><span class="legend-color" style="background: #ff0000;"></span>High (1.0)</span>',
             '</div>',
+            
+            '<div class="controls">',
+            '<div class="probe-selector">',
+            '<strong>Select probe for coloring:</strong><br/>',
         ]
         
-        # Generate visualization for each probe
-        for probe_name, scores in probe_scores.items():
-            html_parts.append('<div class="probe-section">')
-            html_parts.append(f'<div class="probe-name">{html.escape(probe_name)}</div>')
+        # Add radio buttons for probe selection
+        for i, probe_name in enumerate(probe_names):
+            checked = ' checked' if i == 0 else ''
+            html_parts.append(
+                f'<label><input type="radio" name="probe" value="{html.escape(probe_name)}"{checked}>'
+                f'{html.escape(probe_name)}</label>'
+            )
+        
+        html_parts.extend([
+            '</div>',  # probe-selector
+            '</div>',  # controls
+        ])
+        
+        # Generate message sections with data attributes for JavaScript
+        for msg_data in all_messages:
+            msg_num = msg_data['message_num']
+            player_name = msg_data['player_name']
+            tokens = msg_data['tokens']
+            probe_scores = msg_data['probe_scores']
+            
+            html_parts.append(f'<div class="message-section" data-message="{msg_num}">')
+            html_parts.append(f'<div class="message-header">Message #{msg_num} - {html.escape(player_name)}</div>')
             html_parts.append('<div class="token-container">')
             
-            for token, score in zip(tokens, scores):
-                # Clamp score to [0, 1]
-                score = max(0.0, min(1.0, score))
+            # Create tokens with data attributes and tooltips for all probe scores
+            for token_idx, token in enumerate(tokens):
+                # Build data attributes for all probes
+                data_attrs = []
+                tooltip_lines = []
+                for probe_name, scores in probe_scores.items():
+                    if token_idx < len(scores):
+                        score = scores[token_idx]
+                        data_attrs.append(f'data-{html.escape(probe_name)}="{score:.6f}"')
+                        tooltip_lines.append(f'<div class="probe-score" data-probe="{html.escape(probe_name)}">{html.escape(probe_name)}: {score:.4f}</div>')
                 
-                # Calculate RGB color (green -> yellow -> red)
-                if score < 0.5:
-                    # Green to yellow: increase red component
-                    r = int(255 * (score * 2))
-                    g = 255
-                else:
-                    # Yellow to red: decrease green component
-                    r = 255
-                    g = int(255 * (2 - score * 2))
+                # Display token: replace 'Ġ' with space for readability
+                display_token = token.replace('Ġ', ' ')
+                token_escaped = html.escape(display_token)
                 
-                bg_color = f'rgb({r}, {g}, 0)'
-                
-                # Escape token for HTML
-                token_escaped = html.escape(token)
+                # Add original token in tooltip for debugging
+                original_token_line = f'<div style="border-top: 1px solid #555; margin-top: 4px; padding-top: 4px; font-size: 10px; color: #aaa;">Token: {html.escape(token)}</div>'
+                tooltip_html = f'<div class="tooltip">{"".join(tooltip_lines)}{original_token_line if token != display_token else ""}</div>' if tooltip_lines else ''
                 
                 html_parts.append(
-                    f'<span class="token" style="background-color: {bg_color};" '
-                    f'title="{html.escape(probe_name)}: {score:.4f}">{token_escaped}</span>'
+                    f'<span class="token" {" ".join(data_attrs)}>{token_escaped}{tooltip_html}</span>'
                 )
             
             html_parts.append('</div>')  # token-container
-            html_parts.append('</div>')  # probe-section
+            html_parts.append('</div>')  # message-section
         
-        html_parts.extend(['</body>', '</html>'])
+        # Add JavaScript for interactive probe switching
+        html_parts.extend([
+            '<script>',
+            'function calculateColor(score) {',
+            '  score = Math.max(0.0, Math.min(1.0, score));',
+            '  let r, g;',
+            '  if (score < 0.5) {',
+            '    r = Math.floor(255 * (score * 2));',
+            '    g = 255;',
+            '  } else {',
+            '    r = 255;',
+            '    g = Math.floor(255 * (2 - score * 2));',
+            '  }',
+            '  return `rgb(${r}, ${g}, 0)`;',
+            '}',
+            '',
+            'function updateColors() {',
+            '  const selectedProbe = document.querySelector(\'input[name="probe"]:checked\').value;',
+            '  const tokens = document.querySelectorAll(\'.token\');',
+            '  ',
+            '  tokens.forEach(token => {',
+            '    const scoreAttr = token.getAttribute(`data-${selectedProbe}`);',
+            '    if (scoreAttr !== null) {',
+            '      const score = parseFloat(scoreAttr);',
+            '      token.style.backgroundColor = calculateColor(score);',
+            '      token.title = `${selectedProbe}: ${score.toFixed(4)}`;',
+            '    } else {',
+            '      token.style.backgroundColor = "#ccc";',
+            '      token.title = `${selectedProbe}: N/A`;',
+            '    }',
+            '    ',
+            '    // Update tooltip highlighting for selected probe',
+            '    const probeScores = token.querySelectorAll(\'.probe-score\');',
+            '    probeScores.forEach(scoreDiv => {',
+            '      if (scoreDiv.getAttribute(\'data-probe\') === selectedProbe) {',
+            '        scoreDiv.classList.add(\'selected\');',
+            '      } else {',
+            '        scoreDiv.classList.remove(\'selected\');',
+            '      }',
+            '    });',
+            '  });',
+            '}',
+            '',
+            '// Add event listeners to radio buttons',
+            'document.querySelectorAll(\'input[name="probe"]\').forEach(radio => {',
+            '  radio.addEventListener(\'change\', updateColors);',
+            '});',
+            '',
+            '// Initial color update',
+            'updateColors();',
+            '</script>',
+            '</body>',
+            '</html>',
+        ])
         
         return '\n'.join(html_parts)
     
@@ -158,7 +253,7 @@ class ResultsLogger:
         tokens: List[str],
         probe_scores: ProbeScores,
     ) -> None:
-        """Generate and save HTML visualization for probe activations.
+        """Accumulate visualization data for later consolidated generation.
         
         Args:
             player_name: Name of the player (for title/filename)
@@ -168,31 +263,30 @@ class ResultsLogger:
         if not self.auto_visualize:
             return
         
-        if not tokens or not probe_scores or not probe_scores.token_scores:
+        if not tokens or not probe_scores or not probe_scores.scores:
             return
         
         try:
-            # Create visualization directory
-            viz_dir = self.results_dir / "visualizations"
-            viz_dir.mkdir(exist_ok=True)
-            
-            # Generate filename
+            # Increment counter
             self._viz_counter += 1
-            filename = f"{player_name}_{self._viz_counter:03d}_probe_activations.html"
-            save_path = viz_dir / filename
             
-            # Generate HTML visualization
-            html_content = self._generate_html_visualization(
-                tokens=tokens,
-                probe_scores=probe_scores.token_scores,
-                title=f"Probe Activations - {player_name} (Message {self._viz_counter})",
-            )
+            # Extract token scores from ProbeScores object
+            token_score_dict = {
+                probe_name: score_data.token_scores
+                for probe_name, score_data in probe_scores.scores.items()
+            }
             
-            # Save to file
-            with open(save_path, 'w', encoding='utf-8') as f:
-                f.write(html_content)
-        except Exception:
-            pass
+            # Accumulate data for consolidated visualization
+            self._viz_data.append({
+                'message_num': self._viz_counter,
+                'player_name': player_name,
+                'tokens': tokens,
+                'probe_scores': token_score_dict,
+            })
+        except Exception as e:
+            import traceback
+            print(f"ERROR accumulating visualization data: {e}")
+            traceback.print_exc()
     
     def log_message(
         self,
@@ -233,12 +327,15 @@ class ResultsLogger:
             entry["top_k_logits"] = top_k_logits
         
         if probe_scores is not None:
-            entry["probe_scores"] = {
-                "aggregate_score": probe_scores.aggregate_score,
-                "token_scores": probe_scores.token_scores,
-                "phase_scores": probe_scores.phase_scores,
-                "metadata": probe_scores.metadata,
-            }
+            # Serialize ProbeScores with new nested structure
+            # ProbeScores.scores is a dict mapping probe_name -> ProbeScoreData
+            scores_dict = {}
+            for probe_name, score_data in probe_scores.scores.items():
+                scores_dict[probe_name] = {
+                    "aggregate_score": score_data.aggregate_score,
+                    "token_scores": score_data.token_scores,
+                }
+            entry["probe_scores"] = scores_dict
         
         if metadata is not None:
             entry["metadata"] = metadata
@@ -277,6 +374,43 @@ class ResultsLogger:
         results_file = self.results_dir / "results.json"
         with open(results_file, "w") as f:
             json.dump(results, f, indent=2)
+    
+    def generate_consolidated_visualization(self, experiment_name: Optional[str] = None) -> Optional[Path]:
+        """Generate consolidated HTML visualization from accumulated data.
+        
+        Args:
+            experiment_name: Optional name for the experiment (defaults to using experiment_name from config)
+            
+        Returns:
+            Path to generated HTML file, or None if no data to visualize
+        """
+        if not self._viz_data:
+            return None
+        
+        # Create visualizations directory
+        viz_dir = self.results_dir / "visualizations"
+        viz_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Generate HTML title
+        if experiment_name is None:
+            experiment_name = self.experiment_name
+        title = f"Probe Activations - {experiment_name}"
+        
+        # Generate consolidated HTML
+        html_content = self._generate_html_visualization(
+            all_messages=self._viz_data,
+            title=title
+        )
+        
+        if not html_content:
+            return None
+        
+        # Save HTML file
+        html_file = viz_dir / "consolidated_visualization.html"
+        with open(html_file, "w") as f:
+            f.write(html_content)
+        
+        return html_file
     
     def get_results_path(self) -> Path:
         """Get path to results directory.
