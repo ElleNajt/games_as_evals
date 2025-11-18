@@ -125,7 +125,7 @@ class TestResultsLogger:
             assert "timestamp" in entry
     
     def test_logger_log_message_with_probe_scores(self):
-        """Test logging a message with probe scores."""
+        """Test logging a message with probe scores (multi-probe structure)."""
         with tempfile.TemporaryDirectory() as tmpdir:
             config = SimpleGameConfig(output_dir=tmpdir)
             logger = ResultsLogger(
@@ -134,10 +134,21 @@ class TestResultsLogger:
                 experiment_base="baseline"
             )
             
+            # Import ProbeScoreData for the new structure
+            from src.backends.base import ProbeScoreData
+            
+            # Create ProbeScores with new nested structure
             probe_scores = ProbeScores(
-                aggregate_score=0.85,
-                token_scores=[0.7, 0.8, 0.9, 0.95],
-                phase_scores={"reasoning": 0.6, "answer": 0.95}
+                scores={
+                    'deception_8b': ProbeScoreData(
+                        aggregate_score=0.85,
+                        token_scores=[0.7, 0.8, 0.9, 0.95]
+                    ),
+                    'hallucination_8b': ProbeScoreData(
+                        aggregate_score=0.72,
+                        token_scores=[0.6, 0.7, 0.8, 0.85]
+                    )
+                }
             )
             
             logger.log_message(
@@ -154,9 +165,15 @@ class TestResultsLogger:
                 entry = json.loads(f.read())
             
             assert "probe_scores" in entry
-            assert entry["probe_scores"]["aggregate_score"] == 0.85
-            assert entry["probe_scores"]["token_scores"] == [0.7, 0.8, 0.9, 0.95]
-            assert entry["probe_scores"]["phase_scores"]["reasoning"] == 0.6
+            # Check that both probes are present in serialized data
+            assert "deception_8b" in entry["probe_scores"]
+            assert "hallucination_8b" in entry["probe_scores"]
+            # Check deception probe data
+            assert entry["probe_scores"]["deception_8b"]["aggregate_score"] == 0.85
+            assert entry["probe_scores"]["deception_8b"]["token_scores"] == [0.7, 0.8, 0.9, 0.95]
+            # Check hallucination probe data
+            assert entry["probe_scores"]["hallucination_8b"]["aggregate_score"] == 0.72
+            assert entry["probe_scores"]["hallucination_8b"]["token_scores"] == [0.6, 0.7, 0.8, 0.85]
     
     def test_logger_log_multiple_messages(self):
         """Test logging multiple messages (JSONL format)."""
