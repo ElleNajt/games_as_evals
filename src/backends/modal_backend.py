@@ -24,7 +24,6 @@ class ModalBackend(LLMBackend):
 
     def __init__(
         self,
-        probe: Optional[str] = None,
         probes: Optional[List[str]] = None,
         modal_app_name: Optional[str] = None,
         top_k_logits: int = 0,
@@ -34,18 +33,11 @@ class ModalBackend(LLMBackend):
         Initialize Modal backend.
 
         Args:
-            probe: Single probe name (backward compat) - converted to list internally
             probes: List of probe names (e.g., ["deception_8b", "hallucination_8b"])
             modal_app_name: Override Modal app name (defaults to probe config)
             top_k_logits: Number of top logits to return per token (0 = disabled)
             **kwargs: Additional config (unused for now)
         """
-        # Convert single probe to list for internal consistency
-        if probe and not probes:
-            probes = [probe]
-        elif probe and probes:
-            raise ValueError("Specify either 'probe' or 'probes', not both")
-        
         self.probe_names = probes or []
         self.top_k_logits = top_k_logits
         

@@ -28,22 +28,11 @@ class PlayerConfig:
     name: str
     backend_type: str  # claude, openrouter, modal
     model: str
-    probe: Optional[str] = None
-    probes: Optional[List[str]] = None
+    probes: Optional[List[str]] = None  # List of probe names (can be single-element list)
     temperature: float = 0.7
     max_tokens: int = 512
     system_prompt: str = ""
-    
-    def __post_init__(self):
-        """Normalize probe/probes parameters for consistent handling."""
-        # If both are specified, raise an error
-        if self.probe is not None and self.probes is not None:
-            raise ValueError("Cannot specify both 'probe' and 'probes' parameters")
-        
-        # If probe is specified, convert to probes list for internal consistency
-        # Keep probe field for backward compatibility but use probes internally
-        if self.probe is not None and self.probes is None:
-            self.probes = [self.probe]
+    can_see_probes: bool = False  # If True, this player can see probe scores in prompts
     
     def to_dict(self) -> dict:
         """Convert to dictionary for serialization."""
@@ -51,9 +40,9 @@ class PlayerConfig:
             "name": self.name,
             "backend_type": self.backend_type,
             "model": self.model,
-            "probe": self.probe,
             "probes": self.probes,
             "temperature": self.temperature,
             "max_tokens": self.max_tokens,
             "system_prompt": self.system_prompt,
+            "can_see_probes": self.can_see_probes,
         }
