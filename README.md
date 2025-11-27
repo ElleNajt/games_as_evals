@@ -327,7 +327,9 @@ results/
         ├── config.json          # Complete game configuration
         ├── messages.jsonl       # All player messages
         ├── events.jsonl         # Game events
-        └── results.json         # Final results
+        ├── results.json         # Final results
+        └── visualizations/      # HTML probe visualizations (auto-generated)
+            └── consolidated_probe_visualization.html
 ```
 
 ### Message Log Format
