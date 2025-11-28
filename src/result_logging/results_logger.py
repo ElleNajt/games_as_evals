@@ -412,6 +412,40 @@ class ResultsLogger:
         
         return html_file
     
+    def generate_readable_messages(self) -> Optional[Path]:
+        """Generate human-readable markdown format of messages.jsonl.
+        
+        Automatically called at the end of a game to create a readable version
+        of the messages log.
+        
+        Returns:
+            Path to generated markdown file, or None if no messages exist
+        """
+        if not self.messages_file.exists():
+            return None
+        
+        try:
+            # Import the format function from the script
+            import sys
+            from pathlib import Path
+            
+            # Add src to path if not already there
+            src_path = Path(__file__).parent.parent
+            if str(src_path) not in sys.path:
+                sys.path.insert(0, str(src_path))
+            
+            from scripts.format_messages import format_messages
+            
+            # Generate the markdown file
+            output_path = self.results_dir / "messages.md"
+            format_messages(self.messages_file, output_path)
+            
+            return output_path
+            
+        except Exception as e:
+            print(f"Warning: Could not generate readable messages: {e}")
+            return None
+    
     def get_results_path(self) -> Path:
         """Get path to results directory.
         

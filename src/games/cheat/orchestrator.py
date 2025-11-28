@@ -428,6 +428,11 @@ Think carefully about whether they might be lying.
         # Save results
         self.logger.save_results(results)
         
+        # Generate readable markdown format
+        markdown_path = self.logger.generate_readable_messages()
+        if markdown_path:
+            print(f"Readable messages generated: {markdown_path}")
+        
         print(f"\nResults saved to: {self.logger.results_dir}")
         
         return results
