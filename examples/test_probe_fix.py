@@ -4,8 +4,9 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.games.cheat.config import CheatConfig, PlayerConfig
-from src.games.cheat.game import CheatGame
+from src.games.cheat.config import CheatConfig
+from src.config.player_config import PlayerConfig
+from src.experiments.cheat_batch_runner import CheatBatchRunner
 
 def main():
     """Run a quick test game with one player having deception probe access."""
@@ -16,7 +17,6 @@ def main():
         num_decks=1,
         max_turns=30,
         provide_probe_scores=True,
-        enable_history=True,
     )
     
     # Player 1 has deception probe access
@@ -60,13 +60,14 @@ def main():
         ),
     ]
     
-    # Run one game
+    # Run one game using batch runner
     print("Running test game with deception probe...")
     print("Player 1 has probe access, others don't")
     print("-" * 80)
     
-    game = CheatGame(config)
-    result = game.run()
+    runner = CheatBatchRunner(config)
+    results = runner.run_batch(num_games=1, output_dir=None)
+    result = results[0]
     
     print("\n" + "=" * 80)
     print("GAME RESULT:")
