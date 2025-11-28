@@ -129,8 +129,11 @@ class ModalBackend(LLMBackend):
             for probe_name, probe_data in result["probe_results"].items():
                 raw_token_scores = probe_data.get("token_scores", [])
                 
-                # Apply sigmoid transformation
-                token_scores = [sigmoid(score) for score in raw_token_scores]
+                # Get bias from probe config
+                bias = self.probe_configs[probe_name].bias
+                
+                # Apply sigmoid transformation with bias
+                token_scores = [sigmoid(score + bias) for score in raw_token_scores]
                 
                 # Calculate aggregate
                 aggregate = sum(token_scores) / len(token_scores) if token_scores else 0.0

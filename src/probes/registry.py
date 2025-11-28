@@ -39,6 +39,9 @@ class ProbeConfig:
     
     estimated_memory_gb: int = 24
     """Estimated GPU memory usage in GB"""
+    
+    bias: float = 0.0
+    """Bias term for sigmoid transformation (shifts decision boundary)"""
 
 
 # Registry of available probes
