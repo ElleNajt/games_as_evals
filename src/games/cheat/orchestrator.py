@@ -16,9 +16,10 @@ from src.backends import create_backend
 class CheatOrchestrator:
     """Orchestrates a game of Cheat/Bullshit."""
     
-    def __init__(self, config: CheatConfig, experiment_name: str = "cheat_test"):
+    def __init__(self, config: CheatConfig, experiment_name: str = "cheat_test", game_id: Optional[int] = None):
         self.config = config
         self.experiment_name = experiment_name
+        self.game_id = game_id
         self.state: Optional[CheatGameState] = None
         self.players: List[GamePlayer] = []
         self.logger: Optional[ResultsLogger] = None
@@ -41,7 +42,8 @@ class CheatOrchestrator:
         self.logger = ResultsLogger(
             config=self.config,
             game_name="cheat",
-            experiment_base=self.experiment_name
+            experiment_base=self.experiment_name,
+            game_id=self.game_id
         )
         
         # Create game players

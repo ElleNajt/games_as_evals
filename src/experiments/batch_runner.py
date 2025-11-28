@@ -183,6 +183,27 @@ class BatchRunner:
         
         if save_results:
             results.save()
+            
+            # Try to generate aggregated probe calibration analysis if available
+            try:
+                from pathlib import Path
+                import subprocess
+                
+                # Check if analyze_probe_calibration.py exists
+                script_path = Path(__file__).parent.parent / "scripts" / "analyze_probe_calibration.py"
+                if script_path.exists():
+                    # Find the results directory
+                    results_dir = Path('results') / self.game_name / experiment_name
+                    if results_dir.exists():
+                        # Run the analysis script
+                        subprocess.run([
+                            "python", str(script_path), str(results_dir)
+                        ], capture_output=True, check=False)
+                        if verbose:
+                            print(f"\nProbe calibration analysis generated (if probe data available)")
+            except Exception as e:
+                if verbose:
+                    print(f"\nNote: Could not generate probe calibration analysis: {e}")
         
         return results
     

@@ -29,7 +29,11 @@ def run_cheat_game(
     Returns:
         Game results dict
     """
-    orchestrator = CheatOrchestrator(config, experiment_name=experiment_name)
+    orchestrator = CheatOrchestrator(
+        config, 
+        experiment_name=experiment_name,
+        game_id=round_id  # Pass round_id as game_id for subdirectory organization
+    )
     results = orchestrator.run_game()
     return results
 
