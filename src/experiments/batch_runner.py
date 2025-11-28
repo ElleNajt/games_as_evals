@@ -130,6 +130,9 @@ class BatchRunner:
             total_rounds=num_rounds,
         )
         
+        # Track the actual results directory from the first game
+        actual_results_dir = None
+        
         if verbose:
             print(f"\n{'='*70}")
             print(f"Running batch experiment: {experiment_name}")
@@ -150,6 +153,11 @@ class BatchRunner:
                 )
                 
                 results.successful_rounds += 1
+                
+                # Extract the actual results directory from the first successful game
+                if actual_results_dir is None and 'results_dir' in game_result:
+                    # Get parent directory (remove game1/, game2/, etc.)
+                    actual_results_dir = Path(game_result['results_dir']).parent
                 
                 # Extract statistics
                 stats = self.extract_stats_fn(game_result)
@@ -182,18 +190,18 @@ class BatchRunner:
             self._print_summary(results)
         
         if save_results:
-            results.save()
+            # Use actual results directory if available, otherwise fallback to default
+            results.save(output_dir=actual_results_dir)
             
             # Try to generate aggregated probe calibration analysis if available
             try:
-                from pathlib import Path
                 import subprocess
                 
                 # Check if analyze_probe_calibration.py exists
                 script_path = Path(__file__).parent.parent / "scripts" / "analyze_probe_calibration.py"
                 if script_path.exists():
-                    # Find the results directory
-                    results_dir = Path('results') / self.game_name / experiment_name
+                    # Use actual results directory
+                    results_dir = actual_results_dir or (Path('results') / self.game_name / experiment_name)
                     if results_dir.exists():
                         # Run the analysis script
                         subprocess.run([

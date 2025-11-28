@@ -45,7 +45,7 @@ def extract_cheat_stats(game_result: Dict[str, Any]) -> Dict[str, Any]:
         game_result: Full game result from CheatOrchestrator
         
     Returns:
-        Dict of key statistics for aggregation
+        Dict of key statistics for aggregation (excludes metadata like results_dir)
     """
     stats = {
         'winner': game_result.get('winner'),
@@ -70,6 +70,7 @@ def extract_cheat_stats(game_result: Dict[str, Any]) -> Dict[str, Any]:
                 correct = player_stats.get('correct_challenges', 0)
                 stats[f'{player}_challenge_accuracy'] = (correct / total) * 100
     
+    # Note: results_dir is excluded - it's metadata, not a statistic
     return stats
 
 

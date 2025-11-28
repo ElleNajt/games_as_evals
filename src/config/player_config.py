@@ -33,6 +33,7 @@ class PlayerConfig:
     max_tokens: int = 512
     system_prompt: str = ""
     can_see_probes: bool = False  # If True, this player can see probe scores in prompts
+    omniscient_view: bool = False  # If True, this player can see all players' hands and full game state
     
     def to_dict(self) -> dict:
         """Convert to dictionary for serialization."""
@@ -45,4 +46,5 @@ class PlayerConfig:
             "max_tokens": self.max_tokens,
             "system_prompt": self.system_prompt,
             "can_see_probes": self.can_see_probes,
+            "omniscient_view": self.omniscient_view,
         }

@@ -212,10 +212,20 @@ class CheatOrchestrator:
 YOUR HAND ({player_state.num_cards()} cards):
 {json.dumps(hand_summary, indent=2)}
 
+GAME HISTORY:
+{self.state.get_game_history() if self.state.history else "Game just started - no history yet."}
+
 CURRENT SITUATION:
-- You must play: {self.state.current_rank}
+- You must claim to play: {self.state.current_rank}
 - Pile currently has: {len(self.state.pile)} cards
-- Turn number: {self.state.turn_number + 1}"""
+- Turn number: {self.state.turn_number + 1}
+
+OTHER PLAYERS:"""
+        
+        # Show other players' card counts
+        for i, other_player in enumerate(self.state.players):
+            if i != player_idx:
+                prompt += f"\n- {other_player.name}: {other_player.num_cards()} cards"
         
         # Add omniscient view if enabled for this player
         if player_config.omniscient_view:
@@ -230,7 +240,7 @@ CURRENT SITUATION:
                     prompt += f"\n\n{other_player.name}'s hand ({other_player.num_cards()} cards):\n{json.dumps(other_hand, indent=2)}"
             prompt += "\n=== END OMNISCIENT VIEW ==="
         
-        prompt += """
+        prompt += f"""
 
 RULES:
 - You must play at least 1 card
@@ -364,13 +374,24 @@ CARDS: Ace, King, King
         # Get the player config to check if they can see probes
         challenger_config = self.config.players[challenger_idx]
         
+        # Get challenger's hand summary
+        hand_summary = {}
+        for rank in Rank:
+            count = player_state.count_rank(rank)
+            if count > 0:
+                hand_summary[str(rank)] = count
+        
         prompt = f"""You are playing Cheat (also called Bullshit).
+
+YOUR HAND ({player_state.num_cards()} cards):
+{json.dumps(hand_summary, indent=2)}
+
+GAME HISTORY:
+{self.state.get_game_history(last_n=10)}
 
 LAST PLAY:
 - {played_player.name} claimed to play {last_play['claimed_count']} {last_play['claimed_rank']}(s)
-- Current pile size: {len(self.state.pile)} cards
-
-YOUR HAND: {player_state.num_cards()} cards"""
+- Current pile size: {len(self.state.pile)} cards"""
 
         # Add omniscient view if enabled for this player
         if challenger_config.omniscient_view:

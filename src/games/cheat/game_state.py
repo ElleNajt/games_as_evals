@@ -95,6 +95,7 @@ class CheatGameState:
     last_play: Optional[Dict] = None  # {player_idx, claimed_rank, claimed_count, actual_cards}
     game_over: bool = False
     winner: Optional[str] = None
+    history: List[Dict] = field(default_factory=list)  # Complete game history
     
     def current_player(self) -> PlayerState:
         """Get current player."""
@@ -128,6 +129,16 @@ class CheatGameState:
             'claimed_count': claimed_count,
             'actual_cards': cards
         }
+        
+        # Record in history
+        self.history.append({
+            'type': 'play',
+            'turn': self.turn_number,
+            'player': player.name,
+            'claimed_rank': str(claimed_rank),
+            'claimed_count': claimed_count,
+            'pile_size_after': len(self.pile)
+        })
     
     def resolve_challenge(self, challenger_idx: int) -> Dict:
         """Resolve a challenge.
@@ -161,7 +172,7 @@ class CheatGameState:
         loser.add_cards(self.pile)
         self.pile = []
         
-        return {
+        result = {
             'was_lying': not was_honest,
             'loser_idx': loser_idx,
             'loser_name': loser.name,
@@ -169,6 +180,19 @@ class CheatGameState:
             'challenged_player': self.last_play['player_name'],
             'challenger': self.players[challenger_idx].name
         }
+        
+        # Record in history
+        self.history.append({
+            'type': 'challenge',
+            'turn': self.turn_number,
+            'challenger': self.players[challenger_idx].name,
+            'challenged_player': self.last_play['player_name'],
+            'was_honest': was_honest,
+            'loser': loser.name,
+            'cards_picked_up': cards_picked_up
+        })
+        
+        return result
     
     def check_winner(self) -> Optional[str]:
         """Check if anyone has won (0 cards)."""
@@ -200,6 +224,41 @@ class CheatGameState:
             marker = "→ " if i == self.current_player_idx else "  "
             status = " (ELIMINATED)" if player.is_eliminated else ""
             lines.append(f"{marker}{player.name}: {player.num_cards()} cards{status}")
+        
+        return "\n".join(lines)
+    
+    def get_game_history(self, last_n: Optional[int] = None) -> str:
+        """Get formatted game history.
+        
+        Args:
+            last_n: If provided, only show last N events. Otherwise show all.
+        
+        Returns:
+            Formatted string showing game history
+        """
+        if not self.history:
+            return "No game history yet."
+        
+        history_to_show = self.history[-last_n:] if last_n else self.history
+        
+        lines = []
+        for event in history_to_show:
+            if event['type'] == 'play':
+                lines.append(
+                    f"Turn {event['turn']}: {event['player']} played {event['claimed_count']} {event['claimed_rank']}(s) "
+                    f"(pile: {event['pile_size_after']} cards)"
+                )
+            elif event['type'] == 'challenge':
+                if event['was_honest']:
+                    lines.append(
+                        f"Turn {event['turn']}: {event['challenger']} challenged {event['challenged_player']} - "
+                        f"They were HONEST! {event['loser']} picked up {event['cards_picked_up']} cards"
+                    )
+                else:
+                    lines.append(
+                        f"Turn {event['turn']}: {event['challenger']} challenged {event['challenged_player']} - "
+                        f"They were LYING! {event['loser']} picked up {event['cards_picked_up']} cards"
+                    )
         
         return "\n".join(lines)
 
