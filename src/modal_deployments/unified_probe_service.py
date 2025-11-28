@@ -284,18 +284,12 @@ class UnifiedProbeService:
             model = self.llm.llm_engine.model_executor.driver_worker.model_runner.model
             target_layer = model.model.layers[probe_layer]
             
-            # Storage for probe scores
+            # Storage for probe scores (both prompt and generated tokens)
             token_scores = []
-            first_forward = True
             
             def activation_hook(module, input, output):
                 """Capture activations and score them."""
-                nonlocal first_forward, token_scores
-                
-                # Skip first forward pass (prompt processing)
-                if first_forward:
-                    first_forward = False
-                    return
+                nonlocal token_scores
                 
                 # Extract hidden states
                 assert len(output) == 2
@@ -306,12 +300,13 @@ class UnifiedProbeService:
                 with torch.no_grad():
                     scores = probe_head(resid_post).squeeze(-1)
                     
-                    # Handle batched generation
-                    if scores.numel() == 1:
+                    # Handle batched or sequential processing
+                    if scores.dim() == 0:
+                        # Single token
                         token_scores.append(scores.item())
                     else:
-                        # Take last token
-                        token_scores.append(scores[-1].item())
+                        # Multiple tokens in batch - append all scores
+                        token_scores.extend(scores.tolist())
             
             # Register hook
             hook_handle = target_layer.register_forward_hook(activation_hook)
@@ -330,10 +325,19 @@ class UnifiedProbeService:
             finally:
                 hook_handle.remove()
             
-            # Fix alignment if needed (EOS token)
-            if len(token_scores) != len(generated_ids):
-                if len(token_scores) + 1 == len(generated_ids):
-                    token_scores.append(0.0)  # EOS gets neutral score
+            # Separate prompt scores from generation scores
+            # token_scores now contains scores for ALL tokens (prompt + generation)
+            total_tokens = prompt_num_tokens + len(generated_ids)
+            
+            # If we have more scores than expected, truncate (sometimes model adds extra tokens)
+            if len(token_scores) > total_tokens:
+                token_scores = token_scores[:total_tokens]
+            # If we have fewer scores, pad with zeros
+            elif len(token_scores) < total_tokens:
+                token_scores.extend([0.0] * (total_tokens - len(token_scores)))
+            
+            # Extract only generation token scores (skip prompt scores)
+            generation_token_scores = token_scores[prompt_num_tokens:]
             
             # Decode tokens
             generated_tokens = self.tokenizer.convert_ids_to_tokens(generated_ids)
@@ -355,7 +359,7 @@ class UnifiedProbeService:
             result = {
                 "generated_text": generated_text,
                 "generated_tokens": generated_tokens,
-                "token_scores": token_scores,
+                "token_scores": generation_token_scores,  # Only generation token scores
                 "prompt_num_tokens": prompt_num_tokens,
                 "generated_num_tokens": len(generated_ids),
             }
@@ -440,9 +444,8 @@ class UnifiedProbeService:
             # Get model
             model = self.llm.llm_engine.model_executor.driver_worker.model_runner.model
             
-            # Storage for each probe's scores
+            # Storage for each probe's scores (both prompt and generated tokens)
             probe_token_scores = {probe_name: [] for probe_name in probe_paths}
-            first_forward_flags = {probe_name: True for probe_name in probe_paths}
             
             # Create activation hooks for each probe
             hook_handles = []
@@ -455,12 +458,7 @@ class UnifiedProbeService:
                 def make_hook(pname, phead):
                     def activation_hook(module, input, output):
                         """Capture activations and score them."""
-                        nonlocal first_forward_flags, probe_token_scores
-                        
-                        # Skip first forward pass (prompt processing)
-                        if first_forward_flags[pname]:
-                            first_forward_flags[pname] = False
-                            return
+                        nonlocal probe_token_scores
                         
                         # Extract hidden states
                         assert len(output) == 2
@@ -471,12 +469,13 @@ class UnifiedProbeService:
                         with torch.no_grad():
                             scores = phead(resid_post).squeeze(-1)
                             
-                            # Handle batched generation
-                            if scores.numel() == 1:
+                            # Handle batched or sequential processing
+                            if scores.dim() == 0:
+                                # Single token
                                 probe_token_scores[pname].append(scores.item())
                             else:
-                                # Take last token
-                                probe_token_scores[pname].append(scores[-1].item())
+                                # Multiple tokens in batch - append all scores
+                                probe_token_scores[pname].extend(scores.tolist())
                     
                     return activation_hook
                 
@@ -501,12 +500,22 @@ class UnifiedProbeService:
                 for hook_handle in hook_handles:
                     hook_handle.remove()
             
-            # Fix alignment if needed (EOS token) for each probe
+            # Separate prompt scores from generation scores for each probe
+            # Each probe's token_scores now contains scores for ALL tokens (prompt + generation)
+            total_tokens = prompt_num_tokens + len(generated_ids)
+            
             for probe_name in probe_paths:
                 token_scores = probe_token_scores[probe_name]
-                if len(token_scores) != len(generated_ids):
-                    if len(token_scores) + 1 == len(generated_ids):
-                        probe_token_scores[probe_name].append(0.0)  # EOS gets neutral score
+                
+                # If we have more scores than expected, truncate
+                if len(token_scores) > total_tokens:
+                    token_scores = token_scores[:total_tokens]
+                # If we have fewer scores, pad with zeros
+                elif len(token_scores) < total_tokens:
+                    token_scores.extend([0.0] * (total_tokens - len(token_scores)))
+                
+                # Extract only generation token scores (skip prompt scores)
+                probe_token_scores[probe_name] = token_scores[prompt_num_tokens:]
             
             # Decode tokens
             generated_tokens = self.tokenizer.convert_ids_to_tokens(generated_ids)
