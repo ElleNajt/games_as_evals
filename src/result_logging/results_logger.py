@@ -95,7 +95,8 @@ class ResultsLogger:
         # Collect all unique probe names
         probe_names = set()
         for msg in all_messages:
-            probe_names.update(msg['probe_scores'].keys())
+            if 'probe_scores' in msg:
+                probe_names.update(msg['probe_scores'].keys())
         probe_names = sorted(probe_names)
         
         html_parts = [
@@ -113,8 +114,8 @@ class ResultsLogger:
             '.probe-selector input[type="radio"] { margin-right: 5px; }',
             '.message-section { margin: 30px 0; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }',
             '.message-header { font-size: 16px; font-weight: bold; margin-bottom: 10px; color: #555; border-bottom: 2px solid #eee; padding-bottom: 5px; }',
-            '.token-container { line-height: 2.5; margin-top: 10px; }',
-            '.token { padding: 4px 2px; border-radius: 3px; position: relative; cursor: help; }',
+            '.token-container { line-height: 1.8; margin-top: 10px; word-wrap: break-word; }',
+            '.token { padding: 2px 1px; border-radius: 2px; position: relative; cursor: help; display: inline-block; }',
             '.token .tooltip { display: none; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); margin-bottom: 5px; padding: 8px 12px; background: rgba(0, 0, 0, 0.9); color: white; border-radius: 4px; white-space: nowrap; font-size: 12px; z-index: 1000; pointer-events: none; }',
             '.token .tooltip::after { content: ""; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 5px solid transparent; border-top-color: rgba(0, 0, 0, 0.9); }',
             '.token:hover .tooltip { display: block; }',
@@ -154,38 +155,54 @@ class ResultsLogger:
         ])
         
         # Generate message sections with data attributes for JavaScript
-        for msg_data in all_messages:
-            msg_num = msg_data['message_num']
+        for msg_num, msg_data in enumerate(all_messages, 1):
             player_name = msg_data['player_name']
-            tokens = msg_data['tokens']
-            probe_scores = msg_data['probe_scores']
+            generation_tokens = msg_data.get('tokens', [])
+            prompt_tokens = msg_data.get('prompt_tokens', [])
+            probe_scores = msg_data.get('probe_scores', {})
+            response = msg_data.get('response', '')
+            
+            # Combine prompt tokens + generation tokens for full sequence visualization
+            all_tokens = prompt_tokens + generation_tokens
             
             html_parts.append(f'<div class="message-section" data-message="{msg_num}">')
             html_parts.append(f'<div class="message-header">Message #{msg_num} - {html.escape(player_name)}</div>')
             html_parts.append('<div class="token-container">')
             
-            # Create tokens with data attributes and tooltips for all probe scores
-            for token_idx, token in enumerate(tokens):
-                # Build data attributes for all probes
-                data_attrs = []
-                tooltip_lines = []
-                for probe_name, scores in probe_scores.items():
-                    if token_idx < len(scores):
-                        score = scores[token_idx]
-                        data_attrs.append(f'data-{html.escape(probe_name)}="{score:.6f}"')
-                        tooltip_lines.append(f'<div class="probe-score" data-probe="{html.escape(probe_name)}">{html.escape(probe_name)}: {score:.4f}</div>')
-                
-                # Display token: replace 'Ġ' with space for readability
-                display_token = token.replace('Ġ', ' ')
-                token_escaped = html.escape(display_token)
-                
-                # Add original token in tooltip for debugging
-                original_token_line = f'<div style="border-top: 1px solid #555; margin-top: 4px; padding-top: 4px; font-size: 10px; color: #aaa;">Token: {html.escape(token)}</div>'
-                tooltip_html = f'<div class="tooltip">{"".join(tooltip_lines)}{original_token_line if token != display_token else ""}</div>' if tooltip_lines else ''
-                
-                html_parts.append(
-                    f'<span class="token" {" ".join(data_attrs)}>{token_escaped}{tooltip_html}</span>'
-                )
+            # If tokens are available, show token-level visualization
+            if all_tokens:
+                # Create tokens with data attributes and tooltips for all probe scores
+                for token_idx, token in enumerate(all_tokens):
+                    # Build data attributes for all probes
+                    data_attrs = []
+                    tooltip_lines = []
+                    for probe_name, probe_data in probe_scores.items():
+                        # probe_data is a dict with 'aggregate_score', 'token_scores', and 'prompt_token_scores'
+                        prompt_scores = probe_data.get('prompt_token_scores', []) if isinstance(probe_data, dict) else []
+                        generation_scores = probe_data.get('token_scores', []) if isinstance(probe_data, dict) else probe_data
+                        
+                        # Combine prompt + generation scores
+                        combined_scores = prompt_scores + generation_scores
+                        
+                        if token_idx < len(combined_scores):
+                            score = combined_scores[token_idx]
+                            data_attrs.append(f'data-{html.escape(probe_name)}="{score:.6f}"')
+                            tooltip_lines.append(f'<div class="probe-score" data-probe="{html.escape(probe_name)}">{html.escape(probe_name)}: {score:.4f}</div>')
+                    
+                    # Display token: replace 'Ġ' with space for readability
+                    display_token = token.replace('Ġ', ' ')
+                    token_escaped = html.escape(display_token)
+                    
+                    # Add original token in tooltip for debugging
+                    original_token_line = f'<div style="border-top: 1px solid #555; margin-top: 4px; padding-top: 4px; font-size: 10px; color: #aaa;">Token: {html.escape(token)}</div>'
+                    tooltip_html = f'<div class="tooltip">{"".join(tooltip_lines)}{original_token_line if token != display_token else ""}</div>' if tooltip_lines else ''
+                    
+                    html_parts.append(
+                        f'<span class="token" {" ".join(data_attrs)}>{token_escaped}{tooltip_html}</span>'
+                    )
+            else:
+                # No tokens available - show plain text response
+                html_parts.append(f'<div style="color: #666; font-style: italic; padding: 10px;">{html.escape(response)}</div>')
             
             html_parts.append('</div>')  # token-container
             html_parts.append('</div>')  # message-section
@@ -295,6 +312,7 @@ class ResultsLogger:
         prompt: str,
         response: str,
         tokens: Optional[List[str]] = None,
+        prompt_tokens: Optional[List[str]] = None,
         top_k_logits: Optional[List[Dict[str, float]]] = None,
         probe_scores: Optional[ProbeScores] = None,
         metadata: Optional[Dict[str, Any]] = None,
@@ -307,6 +325,7 @@ class ResultsLogger:
             prompt: Prompt sent to the player
             response: Response from the player
             tokens: Optional list of generated tokens
+            prompt_tokens: Optional list of prompt tokens
             top_k_logits: Optional top-k logits for each token
             probe_scores: Optional probe scores
             metadata: Optional additional metadata
@@ -323,6 +342,9 @@ class ResultsLogger:
         if tokens is not None:
             entry["tokens"] = tokens
         
+        if prompt_tokens is not None:
+            entry["prompt_tokens"] = prompt_tokens
+        
         if top_k_logits is not None:
             entry["top_k_logits"] = top_k_logits
         
@@ -334,6 +356,7 @@ class ResultsLogger:
                 scores_dict[probe_name] = {
                     "aggregate_score": score_data.aggregate_score,
                     "token_scores": score_data.token_scores,
+                    "prompt_token_scores": score_data.prompt_token_scores,
                 }
             entry["probe_scores"] = scores_dict
         

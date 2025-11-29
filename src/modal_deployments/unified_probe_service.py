@@ -3,6 +3,8 @@ Unified Modal backend for serving LLM probes with vLLM.
 
 Single service that handles all probe types (deception, hallucination, etc.)
 by loading from volume paths and returning per-token activations.
+
+Version: 2.1 - Added prompt token scoring (2025-11-29)
 """
 
 import modal
@@ -336,10 +338,12 @@ class UnifiedProbeService:
             elif len(token_scores) < total_tokens:
                 token_scores.extend([0.0] * (total_tokens - len(token_scores)))
             
-            # Extract only generation token scores (skip prompt scores)
+            # Split into prompt and generation scores
+            prompt_token_scores = token_scores[:prompt_num_tokens]
             generation_token_scores = token_scores[prompt_num_tokens:]
             
-            # Decode tokens
+            # Decode ALL tokens (prompt + generation)
+            prompt_tokens = self.tokenizer.convert_ids_to_tokens(prompt_token_ids)
             generated_tokens = self.tokenizer.convert_ids_to_tokens(generated_ids)
             generated_text = self.tokenizer.decode(generated_ids, skip_special_tokens=True)
             
@@ -359,7 +363,9 @@ class UnifiedProbeService:
             result = {
                 "generated_text": generated_text,
                 "generated_tokens": generated_tokens,
-                "token_scores": generation_token_scores,  # Only generation token scores
+                "token_scores": generation_token_scores,  # Generation token scores
+                "prompt_tokens": prompt_tokens,  # NEW: Prompt tokens
+                "prompt_token_scores": prompt_token_scores,  # NEW: Prompt token scores
                 "prompt_num_tokens": prompt_num_tokens,
                 "generated_num_tokens": len(generated_ids),
             }
@@ -504,6 +510,10 @@ class UnifiedProbeService:
             # Each probe's token_scores now contains scores for ALL tokens (prompt + generation)
             total_tokens = prompt_num_tokens + len(generated_ids)
             
+            # Storage for split scores
+            probe_generation_scores = {}
+            probe_prompt_scores = {}
+            
             for probe_name in probe_paths:
                 token_scores = probe_token_scores[probe_name]
                 
@@ -514,10 +524,12 @@ class UnifiedProbeService:
                 elif len(token_scores) < total_tokens:
                     token_scores.extend([0.0] * (total_tokens - len(token_scores)))
                 
-                # Extract only generation token scores (skip prompt scores)
-                probe_token_scores[probe_name] = token_scores[prompt_num_tokens:]
+                # Split into prompt and generation scores
+                probe_prompt_scores[probe_name] = token_scores[:prompt_num_tokens]
+                probe_generation_scores[probe_name] = token_scores[prompt_num_tokens:]
             
-            # Decode tokens
+            # Decode ALL tokens (prompt + generation)
+            prompt_tokens = self.tokenizer.convert_ids_to_tokens(prompt_token_ids)
             generated_tokens = self.tokenizer.convert_ids_to_tokens(generated_ids)
             generated_text = self.tokenizer.decode(generated_ids, skip_special_tokens=True)
             
@@ -538,7 +550,8 @@ class UnifiedProbeService:
             probe_results = {}
             for probe_name in probe_paths:
                 probe_results[probe_name] = {
-                    "token_scores": probe_token_scores[probe_name],
+                    "token_scores": probe_generation_scores[probe_name],  # Generation token scores
+                    "prompt_token_scores": probe_prompt_scores[probe_name],  # NEW: Prompt token scores
                     "prompt_num_tokens": prompt_num_tokens,
                     "generated_num_tokens": len(generated_ids),
                 }
@@ -546,6 +559,7 @@ class UnifiedProbeService:
             result = {
                 "generated_text": generated_text,
                 "generated_tokens": generated_tokens,
+                "prompt_tokens": prompt_tokens,  # NEW: Prompt tokens
                 "probe_results": probe_results,
             }
             

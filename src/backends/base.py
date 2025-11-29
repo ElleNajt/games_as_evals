@@ -14,7 +14,10 @@ class ProbeScoreData:
     """Mean/summary score across all tokens"""
     
     token_scores: List[float]
-    """Per-token probe scores"""
+    """Per-token probe scores (generation tokens only)"""
+    
+    prompt_token_scores: Optional[List[float]] = None
+    """Per-token probe scores for prompt tokens"""
     
     phase_scores: Optional[Dict[str, float]] = None
     """Phase-based scores (e.g., prompt/CoT/action for Werewolf)"""
@@ -89,7 +92,10 @@ class GenerationResult:
     """Generated text response"""
     
     tokens: Optional[List[str]] = None
-    """Token list (Modal only)"""
+    """Token list for generation (Modal only)"""
+    
+    prompt_tokens: Optional[List[str]] = None
+    """Token list for prompt (Modal only)"""
     
     top_k_logits: Optional[List[Dict[str, float]]] = None
     """Top-k logits per token (Modal only, if requested)"""

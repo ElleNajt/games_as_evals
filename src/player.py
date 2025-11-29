@@ -86,6 +86,7 @@ class GamePlayer:
                 prompt=prompt,
                 response=result.text,
                 tokens=result.tokens,
+                prompt_tokens=result.prompt_tokens,  # NEW: Include prompt tokens
                 top_k_logits=result.top_k_logits,
                 probe_scores=result.probe_scores,
                 metadata={

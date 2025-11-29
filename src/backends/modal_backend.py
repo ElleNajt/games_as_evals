@@ -119,6 +119,7 @@ class ModalBackend(LLMBackend):
 
         text = result.get("generated_text", "")
         tokens = result.get("generated_tokens")
+        prompt_tokens = result.get("prompt_tokens")  # NEW: Get prompt tokens
         top_k_logits = result.get("top_k_logits")
 
         # Extract probe scores for each probe
@@ -128,18 +129,23 @@ class ModalBackend(LLMBackend):
             
             for probe_name, probe_data in result["probe_results"].items():
                 raw_token_scores = probe_data.get("token_scores", [])
+                raw_prompt_token_scores = probe_data.get("prompt_token_scores", [])
                 
                 # Get bias from probe config
                 bias = self.probe_configs[probe_name].bias
                 
-                # Apply sigmoid transformation with bias
+                # Apply sigmoid transformation with bias to generation tokens
                 token_scores = [sigmoid(score + bias) for score in raw_token_scores]
                 
-                # Calculate aggregate
+                # Apply sigmoid transformation to prompt tokens (NEW)
+                prompt_token_scores = [sigmoid(score + bias) for score in raw_prompt_token_scores]
+                
+                # Calculate aggregate (only for generation tokens)
                 aggregate = sum(token_scores) / len(token_scores) if token_scores else 0.0
                 
                 metadata = {
                     "num_tokens": len(token_scores),
+                    "num_prompt_tokens": len(prompt_token_scores),
                     "probe_type": self.probe_configs[probe_name].probe_type,
                     "layer": self.probe_configs[probe_name].layer,
                 }
@@ -147,6 +153,7 @@ class ModalBackend(LLMBackend):
                 probe_score_dict[probe_name] = ProbeScoreData(
                     aggregate_score=aggregate,
                     token_scores=token_scores,
+                    prompt_token_scores=prompt_token_scores,  # NEW: Include prompt scores
                     phase_scores=None,
                     metadata=metadata,
                 )
@@ -156,6 +163,7 @@ class ModalBackend(LLMBackend):
         return GenerationResult(
             text=text,
             tokens=tokens,
+            prompt_tokens=prompt_tokens,  # NEW: Include prompt tokens
             top_k_logits=top_k_logits,
             probe_scores=probe_scores,
         )
