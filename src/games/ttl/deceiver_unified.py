@@ -147,10 +147,10 @@ Format your response exactly as:
 
 Make them similar in length and difficulty to distinguish. Focus on objective, verifiable facts."""
     
-    # Generate with GamePlayer
+    # Generate with config parameters
     result = player.query(
         prompt=prompt,
-        max_tokens=200,
+        max_tokens=config.max_tokens,
         temperature=config.temperature,
     )
     
@@ -233,7 +233,7 @@ Which statement is the lie (the one NOT based on the facts)? Respond with ONLY t
 
 Which statement is the lie (the one that is FALSE)? Respond with ONLY the number (1, 2, or 3)."""
     
-    # Generate with greedy decoding
+    # Generate with greedy decoding (always short answer for reveal)
     result = player.query(
         prompt=prompt,
         max_tokens=20,

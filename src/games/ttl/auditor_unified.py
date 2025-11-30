@@ -74,11 +74,11 @@ Respond with ONLY the number (1, 2, or 3)."""
         
         has_probe_access = False
     
-    # Generate with greedy decoding
+    # Generate with config parameters
     result = player.query(
         prompt=prompt,
-        max_tokens=20,
-        temperature=0.0,
+        max_tokens=config.max_tokens,
+        temperature=config.temperature,
     )
     
     # Extract the number from response
