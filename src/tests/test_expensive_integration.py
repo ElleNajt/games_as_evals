@@ -105,20 +105,20 @@ class TestBackendIntegration8B:
 class TestTTLGame8B:
     """Test TTL game with 8B model and various probe configurations."""
 
-    def test_ttl_8b_hallucination_only(self):
-        """Run 1 round of TTL with 8B and hallucination probe only."""
-        exp_config = get_experiment_config("8b_hallucination")
+    def test_ttl_8b_both_probes(self):
+        """Run 1 round of TTL with 8B and both deception + hallucination probes."""
+        exp_config = get_experiment_config("8b_both")
         config = TTLConfig(**exp_config.to_ttl_config_kwargs(use_real_world_facts=True))
 
-        # Verify config
-        assert config.deceiver_config.probes == ["hallucination_8b"]
-        assert config.auditor_config.probes == ["hallucination_8b"]
+        # Verify config - should have both probes
+        assert config.deceiver_config.probes == ["deception_8b", "hallucination_8b"]
+        assert config.auditor_config.probes == ["deception_8b", "hallucination_8b"]
 
         # Run one round
         results = run_game_round(
             config=config,
             facts=None,
-            experiment_name="test_ttl_8b_hallucination",
+            experiment_name="test_ttl_8b_both",
             round_id=1,
         )
 
