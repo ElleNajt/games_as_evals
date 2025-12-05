@@ -1,12 +1,15 @@
 """Modal backend implementation with multi-probe support."""
 
+import logging
 import math
 from typing import Any, Dict, List, Optional
 
 import modal
 
-from ..probes.registry import get_probe_config, PROBE_REGISTRY
-from .base import GenerationResult, LLMBackend, ProbeScores, ProbeScoreData
+from ..probes.registry import PROBE_REGISTRY, get_probe_config
+from .base import GenerationResult, LLMBackend, ProbeScoreData, ProbeScores
+
+logger = logging.getLogger(__name__)
 
 
 def sigmoid(x: float) -> float:
@@ -40,34 +43,45 @@ class ModalBackend(LLMBackend):
         """
         self.probe_names = probes or []
         self.top_k_logits = top_k_logits
-        
+
         # Get configs for all probes
         self.probe_configs = {}
         if self.probe_names:
             for probe_name in self.probe_names:
                 self.probe_configs[probe_name] = get_probe_config(probe_name)
-        
-        # Determine modal_app_name (all probes should use same app)
-        if not modal_app_name and self.probe_configs:
+
+        # Validate all probes use same model and app
+        if self.probe_configs:
+            models = set(cfg.model_name for cfg in self.probe_configs.values())
+            if len(models) > 1:
+                raise ValueError(
+                    f"All probes must be for the same model. Got probes for: {models}. "
+                    f"Cannot mix 8B and 70B probes in a single backend."
+                )
+
             apps = set(cfg.modal_app_name for cfg in self.probe_configs.values())
             if len(apps) > 1:
                 raise ValueError(f"All probes must use same Modal app, got: {apps}")
-            modal_app_name = list(apps)[0]
-        
+
+            if not modal_app_name:
+                modal_app_name = list(apps)[0]
+
         self.modal_app_name = modal_app_name or "unified-probe-service"
         self.service = None
 
         probe_str = ", ".join(self.probe_names) if self.probe_names else "none"
         logits_str = f", top_k={top_k_logits}" if top_k_logits > 0 else ""
-        print(f"ModalBackend initialized (app={self.modal_app_name}, probes=[{probe_str}]{logits_str})")
+        logger.info(
+            f"ModalBackend initialized (app={self.modal_app_name}, probes=[{probe_str}]{logits_str})"
+        )
 
     def _ensure_connected(self):
         """Lazy connect to Modal service."""
         if self.service is None:
-            print(f"Connecting to Modal app '{self.modal_app_name}'...")
+            logger.info(f"Connecting to Modal app '{self.modal_app_name}'...")
             cls = modal.Cls.from_name(self.modal_app_name, "UnifiedProbeService")
             self.service = cls()
-            print(f"Connected to UnifiedProbeService!")
+            logger.info(f"Connected to UnifiedProbeService!")
 
     def generate(
         self,
@@ -101,10 +115,9 @@ class ModalBackend(LLMBackend):
         """Generate with probe scoring enabled (one or more probes)."""
         # Build probe paths dict
         probe_paths = {
-            name: config.volume_path 
-            for name, config in self.probe_configs.items()
+            name: config.volume_path for name, config in self.probe_configs.items()
         }
-        
+
         # Call unified service with multiple probes
         result = self.service.generate_with_probes.remote(
             messages=messages,
@@ -117,39 +130,43 @@ class ModalBackend(LLMBackend):
         if "error" in result:
             raise RuntimeError(f"Modal generation failed: {result['error']}")
 
-        text = result.get("generated_text", "")
+        text = result["generated_text"]  # Fail if missing
         tokens = result.get("generated_tokens")
-        prompt_tokens = result.get("prompt_tokens")  # NEW: Get prompt tokens
+        prompt_tokens = result.get("prompt_tokens")
         top_k_logits = result.get("top_k_logits")
 
         # Extract probe scores for each probe
         probe_scores = None
         if "probe_results" in result:
             probe_score_dict = {}
-            
+
             for probe_name, probe_data in result["probe_results"].items():
                 raw_token_scores = probe_data.get("token_scores", [])
                 raw_prompt_token_scores = probe_data.get("prompt_token_scores", [])
-                
+
                 # Get bias from probe config
                 bias = self.probe_configs[probe_name].bias
-                
+
                 # Apply sigmoid transformation with bias to generation tokens
                 token_scores = [sigmoid(score + bias) for score in raw_token_scores]
-                
-                # Apply sigmoid transformation to prompt tokens (NEW)
-                prompt_token_scores = [sigmoid(score + bias) for score in raw_prompt_token_scores]
-                
+
+                # Apply sigmoid transformation to prompt tokens
+                prompt_token_scores = [
+                    sigmoid(score + bias) for score in raw_prompt_token_scores
+                ]
+
                 # Calculate aggregate (only for generation tokens)
-                aggregate = sum(token_scores) / len(token_scores) if token_scores else 0.0
-                
+                if not token_scores:
+                    raise ValueError(f"Probe {probe_name} returned no token scores")
+                aggregate = sum(token_scores) / len(token_scores)
+
                 metadata = {
                     "num_tokens": len(token_scores),
                     "num_prompt_tokens": len(prompt_token_scores),
                     "probe_type": self.probe_configs[probe_name].probe_type,
                     "layer": self.probe_configs[probe_name].layer,
                 }
-                
+
                 probe_score_dict[probe_name] = ProbeScoreData(
                     aggregate_score=aggregate,
                     token_scores=token_scores,
@@ -157,7 +174,7 @@ class ModalBackend(LLMBackend):
                     phase_scores=None,
                     metadata=metadata,
                 )
-            
+
             probe_scores = ProbeScores(scores=probe_score_dict)
 
         return GenerationResult(
@@ -179,7 +196,7 @@ class ModalBackend(LLMBackend):
         if "error" in result:
             raise RuntimeError(f"Modal generation failed: {result['error']}")
 
-        text = result.get("generated_text") or result.get("text", "")
+        text = result["generated_text"]  # Fail if missing
         tokens = result.get("tokens")
 
         return GenerationResult(
