@@ -66,8 +66,8 @@ def create_backend(
         if probe and not probes:
             # Backward compat: single probe
             probes = [probe]
-        elif not probes and model and model in DEFAULT_PROBES_BY_MODEL:
-            # Use defaults for this model
+        elif probes is None and model and model in DEFAULT_PROBES_BY_MODEL:
+            # Use defaults for this model (only if probes not explicitly set to [])
             probes = DEFAULT_PROBES_BY_MODEL[model]
             print(f"Using default probes for {model}: {probes}")
         
