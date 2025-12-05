@@ -13,7 +13,7 @@ from pathlib import Path
 import os
 
 # Configuration for 70B model
-DEFAULT_MODEL = "meta-llama/Llama-3.3-70B-Instruct"
+DEFAULT_MODEL = "meta-llama/Meta-Llama-3.1-70B-Instruct"
 N_GPU = 4  # 4x H100 for 70B model
 GPU_CONFIG = modal.gpu.H100(count=4)
 SCALEDOWN_WINDOW = 2 * 60  # 2 minutes
@@ -25,16 +25,9 @@ VOLUME_PATH = "/volume"  # Mount volume at /volume, it contains models/ subdirec
 PROBES_DIR = Path(VOLUME_PATH) / "models" / "probes"
 MODEL_CACHE_DIR = Path(VOLUME_PATH) / "models" / "huggingface"  # HuggingFace model cache
 
-# Load HF token for accessing Llama models
-if modal.is_local():
-    from dotenv import load_dotenv
-    load_dotenv()
-    hf_token = os.getenv("HF_TOKEN") or os.getenv("HF_TOKEN_READ")
-    if not hf_token:
-        raise ValueError("HF_TOKEN or HF_TOKEN_READ must be set in environment or .env file")
-    LOCAL_HF_TOKEN_SECRET = modal.Secret.from_dict({"HF_TOKEN": hf_token})
-else:
-    LOCAL_HF_TOKEN_SECRET = modal.Secret.from_dict({})
+# Use existing Modal secret for HuggingFace token
+# Secret should be named "huggingface-secret" in your Modal account
+HF_SECRET = modal.Secret.from_name("huggingface-secret")
 
 # Modal image
 image = (
@@ -57,7 +50,7 @@ app = modal.App("unified-probe-service-70b", image=image)
 @app.function(
     image=image,
     volumes={VOLUME_PATH: VOLUME},
-    secrets=[LOCAL_HF_TOKEN_SECRET],
+    secrets=[HF_SECRET],
     timeout=3600,  # 1 hour for download
 )
 def download_model_to_volume(model_name: str = DEFAULT_MODEL):
@@ -174,10 +167,10 @@ def load_probe_from_volume(probe_path: Path):
 @app.cls(
     image=image,
     gpu=GPU_CONFIG,
-    scaledown_window=SCALEDOWN_WINDOW,
+    container_idle_timeout=SCALEDOWN_WINDOW,
     volumes={VOLUME_PATH: VOLUME},
     timeout=TIMEOUT,
-    secrets=[LOCAL_HF_TOKEN_SECRET],
+    secrets=[HF_SECRET],
 )
 class UnifiedProbeService:
     """

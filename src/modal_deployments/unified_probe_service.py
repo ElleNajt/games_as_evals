@@ -23,16 +23,9 @@ VOLUME = modal.Volume.from_name("unified-probe-models", create_if_missing=False)
 VOLUME_PATH = "/volume"  # Mount volume at /volume, it contains models/ subdirectory
 PROBES_DIR = Path(VOLUME_PATH) / "models" / "probes"
 
-# Load HF token for accessing Llama models
-if modal.is_local():
-    from dotenv import load_dotenv
-    load_dotenv()
-    hf_token = os.getenv("HF_TOKEN") or os.getenv("HF_TOKEN_READ")
-    if not hf_token:
-        raise ValueError("HF_TOKEN or HF_TOKEN_READ must be set in environment or .env file")
-    LOCAL_HF_TOKEN_SECRET = modal.Secret.from_dict({"HF_TOKEN": hf_token})
-else:
-    LOCAL_HF_TOKEN_SECRET = modal.Secret.from_dict({})
+# Use existing Modal secret for HuggingFace token
+# Secret should be named "huggingface-secret" in your Modal account
+HF_SECRET = modal.Secret.from_name("huggingface-secret")
 
 # Modal image
 image = (
@@ -136,10 +129,10 @@ def load_probe_from_volume(probe_path: Path):
 @app.cls(
     image=image,
     gpu=GPU_CONFIG,
-    scaledown_window=SCALEDOWN_WINDOW,
+    container_idle_timeout=SCALEDOWN_WINDOW,
     volumes={VOLUME_PATH: VOLUME},
     timeout=TIMEOUT,
-    secrets=[LOCAL_HF_TOKEN_SECRET],
+    secrets=[HF_SECRET],
 )
 class UnifiedProbeService:
     """

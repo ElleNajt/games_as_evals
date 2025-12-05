@@ -20,7 +20,7 @@ from pathlib import Path
 from huggingface_hub import hf_hub_download
 
 # Paths
-WORKSPACE = Path("/workspace")
+WORKSPACE = Path(__file__).parent.parent  # games_as_evals root directory
 PROBES_DIR = WORKSPACE / "probes"
 EXTERNAL_REPOS = WORKSPACE / "external_repos"
 
@@ -126,14 +126,14 @@ def upload_to_modal():
         # Format: modal volume put <volume-name> <local-path> <remote-path>
         cmd = [
             "modal", "volume", "put",
-            "models",  # Volume name from unified_probe_service.py
+            "unified-probe-models",  # Volume name from unified_probe_service.py
             str(probe_dir),
-            f"/probes/{probe_name}"
+            f"models/probes/{probe_name}"
         ]
         
         try:
             result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-            print(f"✓ Uploaded {probe_name} to Modal volume 'models' at /probes/{probe_name}")
+            print(f"✓ Uploaded {probe_name} to Modal volume 'unified-probe-models' at models/probes/{probe_name}")
             if result.stdout:
                 print(result.stdout)
         except subprocess.CalledProcessError as e:

@@ -33,7 +33,9 @@ class TTLExperimentAnalyzer:
 
     def _load_data(self):
         """Load all round data."""
-        for round_dir in sorted(self.results_dir.glob("round*")):
+        # Support both "round*" and "game*" directory patterns
+        round_dirs = list(self.results_dir.glob("round*")) + list(self.results_dir.glob("game*"))
+        for round_dir in sorted(round_dirs):
             round_data = {"round_id": round_dir.name}
 
             # Load game results
