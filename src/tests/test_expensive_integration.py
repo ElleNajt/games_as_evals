@@ -124,14 +124,14 @@ class TestTTLGame8B:
 
         # Verify results structure
         assert "statements" in results
-        assert "lie_index" in results
-        assert "auditor_guess" in results
+        assert "revealed_lie" in results
+        assert "auditor_guesses" in results
         assert len(results["statements"]) == 3
-        assert 0 <= results["lie_index"] < 3
+        assert 1 <= results["revealed_lie"] <= 3
 
         print(f"\n✓ Generated statements: {results['statements']}")
-        print(f"✓ Lie was at index: {results['lie_index']}")
-        print(f"✓ Auditor guessed: {results['auditor_guess']}")
+        print(f"✓ Lie was at position: {results['revealed_lie']}")
+        print(f"✓ Auditor guesses: {results['auditor_guesses']}")
 
     def test_ttl_8b_both_probes(self):
         """Run 1 round of TTL with 8B and both probes."""
@@ -152,12 +152,53 @@ class TestTTLGame8B:
 
         # Verify results
         assert "statements" in results
-        assert "lie_index" in results
-        assert "auditor_guess" in results
+        assert "revealed_lie" in results
+        assert "auditor_guesses" in results
         assert len(results["statements"]) == 3
 
         print(f"\n✓ TTL with both probes completed successfully")
         print(f"✓ Auditor correct: {results.get('auditor_correct', False)}")
+
+
+class TestWerewolfGame8B:
+    """Test Werewolf game with 8B model and probes."""
+
+    def test_werewolf_8b_both_probes(self):
+        """Run 1 day/night cycle of Werewolf with 8B and both probes."""
+        from src.games.werewolf import GameCoordinator, WerewolfConfig
+
+        exp_config = get_experiment_config("8b_both")
+
+        # Create Werewolf config with both probes
+        config = WerewolfConfig(
+            **exp_config.to_werewolf_config_kwargs(
+                num_players=5,
+                num_werewolves=2,
+                no_seer=True,  # Disable seer for faster test
+                max_turns=1,  # Just one day/night cycle
+            )
+        )
+
+        # Verify config
+        assert config.num_players == 5
+        assert config.num_werewolves == 2
+        assert config.villager_config.probes == ["deception_8b", "hallucination_8b"]
+        assert config.werewolf_config.probes == ["deception_8b", "hallucination_8b"]
+
+        # Run the game
+        coordinator = GameCoordinator(
+            config=config, experiment_name="test_werewolf_8b_both", game_id=1
+        )
+        results = coordinator.run_game()
+
+        # Verify results structure
+        assert "winner" in results
+        assert "num_rounds" in results
+        assert results["num_rounds"] >= 1
+
+        print(f"\n✓ Werewolf game completed")
+        print(f"✓ Winner: {results.get('winner', 'None')}")
+        print(f"✓ Rounds played: {results['num_rounds']}")
 
 
 @pytest.mark.skip(
