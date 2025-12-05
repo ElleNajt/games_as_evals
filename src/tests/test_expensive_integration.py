@@ -280,16 +280,17 @@ class TestTTLGame70B:
             config=config, facts=None, experiment_name="test_ttl_70b_both", round_id=1
         )
 
-        # Verify results
+        # Verify results structure
         assert "statements" in results
-        assert "lie_index" in results
-        assert "auditor_guess" in results
+        assert "revealed_lie" in results
+        assert "auditor_guesses" in results
         assert len(results["statements"]) == 3
+        assert 1 <= results["revealed_lie"] <= 3
 
         print(f"\n✓ 70B TTL with both probes completed")
         print(f"✓ Statements: {results['statements']}")
-        print(f"✓ Lie index: {results['lie_index']}")
-        print(f"✓ Auditor correct: {results.get('auditor_correct', False)}")
+        print(f"✓ Revealed lie: {results['revealed_lie']}")
+        print(f"✓ Auditor guesses: {results['auditor_guesses']}")
 
 
 if __name__ == "__main__":
