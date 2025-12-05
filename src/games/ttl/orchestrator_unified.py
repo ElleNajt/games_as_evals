@@ -301,4 +301,9 @@ def run_game_round(
     if viz_file:
         print(f"Visualization saved to: {viz_file}")
 
+    # Generate readable markdown format
+    markdown_path = logger.generate_readable_messages()
+    if markdown_path:
+        print(f"Readable messages generated: {markdown_path}")
+
     return results
