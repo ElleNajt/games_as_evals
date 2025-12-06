@@ -1,61 +1,98 @@
 """Run Werewolf batch experiments with 8B model and both probes."""
 
+from pathlib import Path
+
 from src.config.experiment_config import get_experiment_config
-from src.experiments.werewolf.batch_runner import run_batch_experiment
 from src.experiments.werewolf.configs import create_werewolf_config
+from src.experiments.werewolf.batch_runner import run_batch_experiment
+from src.experiments.cli import create_werewolf_parser
 
-print("=" * 70)
-print("Running Werewolf Batch Experiments with 8B Model + Both Probes")
-print("=" * 70)
 
-# Get 8B experiment config with both probes
-exp_config = get_experiment_config("8b_both")
+def main():
+    """Main entry point with CLI argument support."""
+    parser = create_werewolf_parser(
+        description="Run Werewolf batch experiments with 8B model and both probes"
+    )
+    args = parser.parse_args()
+    
+    print("=" * 70)
+    print("Running Werewolf Batch Experiment with 8B Model + Both Probes")
+    print("=" * 70)
+    
+    # Get 8B experiment config with both probes
+    exp_config = get_experiment_config("8b_both")
+    
+    print(f"Model: {exp_config.model}")
+    print(f"Backend: {exp_config.backend_type}")
+    print(f"Probes: {exp_config.probes}")
+    print(f"Top-k logits: {exp_config.top_k_logits}")
+    print(f"Number of rounds: {args.num_rounds}")
+    print(f"Players: {args.num_players}")
+    print(f"Werewolves: {args.num_werewolves}")
+    print(f"Max turns per game: {args.max_turns}")
+    print("=" * 70)
+    print()
+    
+    # Create Werewolf configuration
+    config = create_werewolf_config(
+        exp_config,
+        num_players=args.num_players,
+        num_werewolves=args.num_werewolves,
+        max_turns=args.max_turns
+    )
+    
+    # Determine experiment name
+    experiment_name = args.experiment_name or "werewolf_8b_both_probes"
+    
+    # Run batch experiment
+    print(f"Starting Werewolf batch experiment ({args.num_rounds} games)...")
+    print()
+    
+    results = run_batch_experiment(
+        config=config,
+        num_rounds=args.num_rounds,
+        experiment_name=experiment_name,
+        save_results=not args.no_save,
+    )
+    
+    # Print summary statistics
+    print()
+    print("=" * 70)
+    print("BATCH EXPERIMENT RESULTS")
+    print("=" * 70)
+    
+    # Count wins by faction
+    villager_wins = sum(
+        1 for r in results.round_results if r.get("winner") == "Villagers"
+    )
+    werewolf_wins = sum(
+        1 for r in results.round_results if r.get("winner") == "Werewolves"
+    )
+    
+    print(f"Successful games: {results.successful_rounds}/{results.total_rounds}")
+    print(f"Villager wins: {villager_wins}")
+    print(f"Werewolf wins: {werewolf_wins}")
+    
+    # Calculate average turns
+    if results.successful_rounds > 0:
+        avg_turns = sum(r.get("turns", 0) for r in results.round_results if r.get("success")) / results.successful_rounds
+        print(f"Average turns per game: {avg_turns:.1f}")
+    
+    if not args.no_save:
+        print()
+        print(f"Detailed results saved to: results/werewolf/{experiment_name}/")
+        
+        # Generate plots if requested
+        if args.generate_plots and not args.no_plots:
+            from src.visualization.werewolf_batch_plots import generate_all_plots
+            
+            results_dir = Path("results") / "werewolf" / experiment_name
+            if results_dir.exists():
+                print()
+                generate_all_plots(results_dir)
+    
+    print("=" * 70)
 
-print(f"Model: {exp_config.model}")
-print(f"Backend: {exp_config.backend_type}")
-print(f"Probes: {exp_config.probes}")
-print(f"Top-k logits: {exp_config.top_k_logits}")
-print("=" * 70)
-print()
 
-# Create Werewolf configuration with 5 players, 2 werewolves
-config = create_werewolf_config(
-    exp_config, num_players=5, num_werewolves=2, max_turns=10
-)
-
-# Run batch experiment with 5 games
-print("Running 5 games of Werewolf...")
-print()
-
-results = run_batch_experiment(
-    config=config,
-    num_rounds=5,
-    experiment_name="werewolf_8b_both_probes",
-    save_results=True,
-)
-
-# Print summary
-print()
-print("=" * 70)
-print("EXPERIMENT RESULTS")
-print("=" * 70)
-print(f"Total games: {results.total_rounds}")
-print(f"Successful games: {results.successful_rounds}")
-print(f"Failed games: {results.failed_rounds}")
-print(f"Success rate: {results.success_rate:.1f}%")
-print()
-
-# Count winners
-villager_wins = sum(1 for r in results.round_results if r.get("winner") == "Villagers")
-werewolf_wins = sum(1 for r in results.round_results if r.get("winner") == "Werewolves")
-print(f"Villagers won: {villager_wins} games")
-print(f"Werewolves won: {werewolf_wins} games")
-
-# Average game length
-avg_turns = sum(r.get("turns", 0) for r in results.round_results) / max(
-    len(results.round_results), 1
-)
-print(f"Average turns per game: {avg_turns:.1f}")
-print()
-print(f"Results saved to: results/werewolf/werewolf_8b_both_probes/")
-print("=" * 70)
+if __name__ == "__main__":
+    main()

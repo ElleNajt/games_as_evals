@@ -1,48 +1,82 @@
 """Run TTL batch experiments with 8B model and both probes."""
 
+from pathlib import Path
+
 from src.config.experiment_config import get_experiment_config
+from src.experiments.cli import create_ttl_parser
 from src.experiments.ttl.batch_runner import run_batch_experiment
 from src.experiments.ttl.configs import create_ttl_config
 
-print("=" * 70)
-print("Running TTL Batch Experiments with 8B Model + Both Probes")
-print("=" * 70)
 
-# Get 8B experiment config with both probes
-exp_config = get_experiment_config("8b_both")
+def main():
+    """Main entry point with CLI argument support."""
+    parser = create_ttl_parser(
+        description="Run TTL batch experiments with 8B model and both probes"
+    )
+    args = parser.parse_args()
 
-print(f"Model: {exp_config.model}")
-print(f"Backend: {exp_config.backend_type}")
-print(f"Probes: {exp_config.probes}")
-print(f"Top-k logits: {exp_config.top_k_logits}")
-print("=" * 70)
-print()
+    print("=" * 70)
+    print("Running TTL Batch Experiments with 8B Model + Both Probes")
+    print("=" * 70)
 
-# Create TTL configuration using new config creation function
-config = create_ttl_config(exp_config, use_real_world_facts=True)
+    # Get 8B experiment config with both probes
+    exp_config = get_experiment_config("8b_both")
 
-# Run batch experiment with 10 rounds
-print("Running 10 rounds of TTL game...")
-print()
+    print(f"Model: {exp_config.model}")
+    print(f"Backend: {exp_config.backend_type}")
+    print(f"Probes: {exp_config.probes}")
+    print(f"Top-k logits: {exp_config.top_k_logits}")
+    print(f"Number of rounds: {args.num_rounds}")
+    print("=" * 70)
+    print()
 
-results = run_batch_experiment(
-    config=config,
-    num_rounds=10,
-    experiment_name="ttl_8b_both_probes",
-    facts=None,  # Use random facts
-    save_results=True,
-)
+    # Handle real vs fictional facts
+    use_real_facts = not args.use_fictional_facts
 
-# Print summary
-print()
-print("=" * 70)
-print("EXPERIMENT RESULTS")
-print("=" * 70)
-print(f"Total rounds: {results.total_rounds}")
-print(f"Successful rounds: {results.successful_rounds}")
-print(f"Failed rounds: {results.failed_rounds}")
-print(f"Success rate: {results.success_rate:.1f}%")
-print(f"Auditor accuracy: {results.accuracy:.1f}%")
-print()
-print(f"Results saved to: results/ttl/ttl_8b_both_probes/")
-print("=" * 70)
+    # Create TTL configuration
+    config = create_ttl_config(exp_config, use_real_world_facts=use_real_facts)
+
+    # Determine experiment name
+    experiment_name = args.experiment_name or "ttl_8b_both_probes"
+
+    # Run batch experiment
+    print(f"Running {args.num_rounds} rounds of TTL game...")
+    print()
+
+    results = run_batch_experiment(
+        config=config,
+        num_rounds=args.num_rounds,
+        experiment_name=experiment_name,
+        facts=None,  # Use random facts
+        save_results=not args.no_save,
+    )
+
+    # Print summary
+    print()
+    print("=" * 70)
+    print("EXPERIMENT RESULTS")
+    print("=" * 70)
+    print(f"Total rounds: {results.total_rounds}")
+    print(f"Successful rounds: {results.successful_rounds}")
+    print(f"Failed rounds: {results.failed_rounds}")
+    print(f"Success rate: {results.success_rate:.1f}%")
+    print(f"Auditor accuracy: {results.accuracy:.1f}%")
+
+    if not args.no_save:
+        print()
+        print(f"Results saved to: results/ttl/{experiment_name}/")
+
+        # Generate plots if requested
+        if args.generate_plots and not args.no_plots:
+            from src.visualization.ttl_batch_plots import generate_all_plots
+
+            results_dir = Path("results") / "ttl" / experiment_name
+            if results_dir.exists():
+                print()
+                generate_all_plots(results_dir)
+
+    print("=" * 70)
+
+
+if __name__ == "__main__":
+    main()
