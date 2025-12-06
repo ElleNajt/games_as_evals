@@ -7,6 +7,8 @@ to multiple different games.
 """
 
 from src.config.experiment_config import ExperimentConfig, get_experiment_config
+from src.experiments.werewolf.configs import create_werewolf_config
+from src.experiments.ttl.configs import create_ttl_config
 from src.games.werewolf import WerewolfConfig
 from src.games.ttl import TTLConfig
 
