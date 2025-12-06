@@ -1103,6 +1103,11 @@ Output format: {self.get_output_format("vote analysis", "name")}"""
 
         self.log(f"\nGame stats saved to {stats_file}")
 
+        # Generate HTML visualization with probe scores
+        viz_file = self.logger.generate_consolidated_visualization()
+        if viz_file:
+            self.log(f"HTML visualization generated: {viz_file}")
+
         # Generate readable markdown format
         markdown_path = self.logger.generate_readable_messages()
         if markdown_path:
