@@ -98,6 +98,11 @@ def run_batch_experiment(
                 "with_probe", {}
             )
 
+            # Extract probe scores
+            probe_scores = round_result.get("deceiver_generation", {}).get(
+                "probe_scores", {}
+            )
+
             results.round_results.append(
                 {
                     "round_id": round_num,
@@ -106,6 +111,7 @@ def run_batch_experiment(
                     "statements": round_result.get("statements", []),
                     "lie_index": revealed_lie,
                     "auditor_guess": auditor_with_probe.get("original_guess"),
+                    "probe_scores": probe_scores,
                 }
             )
 
