@@ -39,7 +39,7 @@ def main():
     # Determine experiment name
     experiment_name = args.experiment_name or "ttl_70b_both_probes"
     
-    # Run batch experiment
+    # Run batch experiment (always save)
     print(f"Running {args.num_rounds} rounds of TTL game...")
     print()
     
@@ -48,7 +48,7 @@ def main():
         num_rounds=args.num_rounds,
         experiment_name=experiment_name,
         facts=None,
-        save_results=not args.no_save,
+        save_results=True,
     )
     
     # Print summary
@@ -61,19 +61,15 @@ def main():
     print(f"Failed rounds: {results.failed_rounds}")
     print(f"Success rate: {results.success_rate:.1f}%")
     print(f"Auditor accuracy: {results.accuracy:.1f}%")
+    print()
+    print(f"Results saved to: results/ttl/{experiment_name}/")
     
-    if not args.no_save:
-        print()
-        print(f"Results saved to: results/ttl/{experiment_name}/")
-        
-        # Generate plots if requested
-        if args.generate_plots and not args.no_plots:
-            from src.visualization.ttl_batch_plots import generate_all_plots
-            
-            results_dir = Path("results") / "ttl" / experiment_name
-            if results_dir.exists():
-                print()
-                generate_all_plots(results_dir)
+    # Always generate plots
+    from src.visualization.ttl_batch_plots import generate_all_plots
+    
+    results_dir = Path("results") / "ttl" / experiment_name
+    print()
+    generate_all_plots(results_dir)
     
     print("=" * 70)
 

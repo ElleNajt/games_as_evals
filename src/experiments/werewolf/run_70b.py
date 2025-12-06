@@ -44,7 +44,7 @@ def main():
     # Determine experiment name
     experiment_name = args.experiment_name or "werewolf_70b_both_probes"
     
-    # Run batch experiment
+    # Run batch experiment (always save)
     print(f"Starting Werewolf batch experiment ({args.num_rounds} games)...")
     print()
     
@@ -52,7 +52,7 @@ def main():
         config=config,
         num_rounds=args.num_rounds,
         experiment_name=experiment_name,
-        save_results=not args.no_save,
+        save_results=True,
     )
     
     # Print summary statistics
@@ -78,18 +78,15 @@ def main():
         avg_turns = sum(r.get("turns", 0) for r in results.round_results if r.get("success")) / results.successful_rounds
         print(f"Average turns per game: {avg_turns:.1f}")
     
-    if not args.no_save:
-        print()
-        print(f"Detailed results saved to: results/werewolf/{experiment_name}/")
-        
-        # Generate plots if requested
-        if args.generate_plots and not args.no_plots:
-            from src.visualization.werewolf_batch_plots import generate_all_plots
-            
-            results_dir = Path("results") / "werewolf" / experiment_name
-            if results_dir.exists():
-                print()
-                generate_all_plots(results_dir)
+    print()
+    print(f"Results saved to: results/werewolf/{experiment_name}/")
+    
+    # Always generate plots
+    from src.visualization.werewolf_batch_plots import generate_all_plots
+    
+    results_dir = Path("results") / "werewolf" / experiment_name
+    print()
+    generate_all_plots(results_dir)
     
     print("=" * 70)
 
