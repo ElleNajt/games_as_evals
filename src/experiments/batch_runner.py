@@ -155,6 +155,7 @@ class BatchRunner:
                 # Extract the actual results directory from the first successful game
                 if actual_results_dir is None and "results_dir" in game_result:
                     # Get parent directory (remove game1/, game2/, etc.)
+                    # This gives us the experiment directory with git hash
                     actual_results_dir = Path(game_result["results_dir"]).parent
 
                 # Extract statistics
