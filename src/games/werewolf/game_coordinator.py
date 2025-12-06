@@ -1103,17 +1103,6 @@ Output format: {self.get_output_format("vote analysis", "name")}"""
 
         self.log(f"\nGame stats saved to {stats_file}")
 
-        # Generate visualizations and HTML report
-        try:
-            from visualization.game_visualizer import GameVisualizer
-
-            self.log("\nGenerating visualizations and HTML report...")
-            visualizer = GameVisualizer(self.output_dir)
-            visualizer.generate_all()
-            self.log(f"Report available at: {self.output_dir}/game_report.html")
-        except Exception as e:
-            self.log(f"Warning: Failed to generate visualizations: {e}")
-
         # Generate readable markdown format
         markdown_path = self.logger.generate_readable_messages()
         if markdown_path:
