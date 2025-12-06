@@ -1,16 +1,15 @@
 """Run TTL batch experiments with 8B model and both probes."""
+
 from src.config.experiment_config import get_experiment_config
-from src.experiments.werewolf.configs import create_werewolf_config
+from src.experiments.ttl.batch_runner import run_batch_experiment
 from src.experiments.ttl.configs import create_ttl_config
-from src.games.ttl import TTLConfig
-from src.experiments.ttl_batch_runner import run_batch_experiment
 
 print("=" * 70)
 print("Running TTL Batch Experiments with 8B Model + Both Probes")
 print("=" * 70)
 
 # Get 8B experiment config with both probes
-exp_config = get_experiment_config('8b_both')
+exp_config = get_experiment_config("8b_both")
 
 print(f"Model: {exp_config.model}")
 print(f"Backend: {exp_config.backend_type}")
@@ -19,12 +18,8 @@ print(f"Top-k logits: {exp_config.top_k_logits}")
 print("=" * 70)
 print()
 
-# Create TTL configuration using experiment config
-config = TTLConfig(
-    **exp_config.to_ttl_config_kwargs(
-        use_real_world_facts=True
-    )
-)
+# Create TTL configuration using new config creation function
+config = create_ttl_config(exp_config, use_real_world_facts=True)
 
 # Run batch experiment with 10 rounds
 print("Running 10 rounds of TTL game...")
@@ -33,9 +28,9 @@ print()
 results = run_batch_experiment(
     config=config,
     num_rounds=10,
-    experiment_name='ttl_8b_both_probes',
+    experiment_name="ttl_8b_both_probes",
     facts=None,  # Use random facts
-    save_results=True
+    save_results=True,
 )
 
 # Print summary
