@@ -249,6 +249,7 @@ def run_game_round(
         "round_start": round_start.isoformat(),
         "round_end": round_end.isoformat(),
         "duration_seconds": duration,
+        "results_dir": str(results_dir),
         "config": {
             "use_real_world_facts": config.use_real_world_facts,
             "deceiver_backend": config.deceiver_config.backend_type,
