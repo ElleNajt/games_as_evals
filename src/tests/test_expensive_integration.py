@@ -254,9 +254,6 @@ class TestBackendIntegration70B:
         print(f"✓ 70B Hallucination: {hallucination.aggregate_score:.3f}")
 
 
-@pytest.mark.skip(
-    reason="70B requires 4x H100 GPUs - only run when 70B service is deployed"
-)
 class TestTTLGame70B:
     """Test TTL game with 70B model."""
 
