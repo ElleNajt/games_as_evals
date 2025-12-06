@@ -1,11 +1,11 @@
-"""Run Werewolf game with 70B model and both probes."""
+"""Run Werewolf batch experiments with 70B model and both probes."""
 
 from src.config.experiment_config import get_experiment_config
+from src.experiments.werewolf.batch_runner import run_batch_experiment
 from src.experiments.werewolf.configs import create_werewolf_config
-from src.games.werewolf.game_coordinator import GameCoordinator
 
 print("=" * 70)
-print("Running Werewolf Game with 70B Model + Both Probes")
+print("Running Werewolf Batch Experiment with 70B Model + Both Probes")
 print("=" * 70)
 
 # Get 70B experiment config with both probes
@@ -23,23 +23,39 @@ config = create_werewolf_config(
     exp_config, num_players=5, num_werewolves=2, max_turns=10
 )
 
-# Run the game
-print("Starting Werewolf game...")
+# Run batch experiment (5 games)
+print("Starting Werewolf batch experiment (5 games)...")
 print()
 
-coordinator = GameCoordinator(
-    config=config, experiment_name="werewolf_70b_both_probes", game_id=1
+results = run_batch_experiment(
+    config=config,
+    num_rounds=5,
+    experiment_name="werewolf_70b_both_probes",
+    save_results=True,
 )
 
-winner = coordinator.run_game()
+# Print summary statistics
+print()
+print("=" * 70)
+print("BATCH EXPERIMENT RESULTS")
+print("=" * 70)
 
-# Print summary
+# Count wins by faction
+villager_wins = sum(1 for r in results.round_results if r.get("winner") == "Villagers")
+werewolf_wins = sum(1 for r in results.round_results if r.get("winner") == "Werewolves")
+
+print(f"Successful games: {results.successful_rounds}/{results.total_rounds}")
+print(f"Villager wins: {villager_wins}")
+print(f"Werewolf wins: {werewolf_wins}")
+
+# Calculate average turns
+if results.successful_rounds > 0:
+    avg_turns = (
+        sum(r.get("turns", 0) for r in results.round_results if r.get("success"))
+        / results.successful_rounds
+    )
+    print(f"Average turns per game: {avg_turns:.1f}")
+
 print()
-print("=" * 70)
-print("GAME RESULTS")
-print("=" * 70)
-print(f"Winner: {winner}")
-print(f"Turns played: {coordinator.game.turn_number}")
-print()
-print(f"Results saved to: results/werewolf/werewolf_70b_both_probes/game1/")
+print(f"Detailed results saved to batch_results.json")
 print("=" * 70)
