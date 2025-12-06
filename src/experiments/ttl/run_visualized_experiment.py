@@ -8,6 +8,8 @@ sys.path.insert(0, '/workspace')
 
 from pathlib import Path
 from src.config.experiment_config import get_experiment_config
+from src.experiments.werewolf.configs import create_werewolf_config
+from src.experiments.ttl.configs import create_ttl_config
 from src.games.ttl import TTLConfig
 from src.games.ttl.orchestrator_unified import run_game_round
 from src.visualization.probe_activations import visualize_ttl_game
