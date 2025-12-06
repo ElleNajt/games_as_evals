@@ -190,16 +190,15 @@ class TestWerewolfGame8B:
         coordinator = GameCoordinator(
             config=config, experiment_name="test_werewolf_8b_both", game_id=1
         )
-        results = coordinator.run_game()
+        winner = coordinator.run_game()
 
-        # Verify results structure
-        assert "winner" in results
-        assert "num_rounds" in results
-        assert results["num_rounds"] >= 1
+        # Verify results - run_game returns winner string
+        assert winner in ["Villagers", "Werewolves"]
+        assert coordinator.game.turn_number >= 1
 
         print(f"\n✓ Werewolf game completed")
-        print(f"✓ Winner: {results.get('winner', 'None')}")
-        print(f"✓ Rounds played: {results['num_rounds']}")
+        print(f"✓ Winner: {winner}")
+        print(f"✓ Rounds played: {coordinator.game.turn_number}")
 
 
 @pytest.mark.skip(
