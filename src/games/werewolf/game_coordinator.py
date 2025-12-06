@@ -151,7 +151,7 @@ class GameCoordinator:
         self.log(f"Backends: {', '.join(backend_types)}")
 
         # Check if any player has probe enabled
-        has_probe = any(pc.probe is not None for pc in self.config.players)
+        has_probe = any(pc.probes is not None for pc in self.config.players)
         if has_probe and self.config.provide_probe_scores:
             self.log("Lie detector: ENABLED")
 
@@ -203,7 +203,7 @@ class GameCoordinator:
         """
         # Check if any player has probe scores available
         has_probe = any(
-            player_config.probe is not None for player_config in self.config.players
+            player_config.probes is not None for player_config in self.config.players
         )
 
         if not has_probe:
@@ -589,7 +589,7 @@ Output format: {{"action": "I understand, I am a {player.role.value}"}}"""
 
         # Check if any player has a probe configured
         has_probe = any(
-            player_config.probe is not None for player_config in self.config.players
+            player_config.probes is not None for player_config in self.config.players
         )
 
         if not has_probe:
@@ -1064,7 +1064,7 @@ Output format: {self.get_output_format("vote analysis", "name")}"""
         """Save game statistics and history."""
         # Get unique backend types from player configs
         backend_types = list(set(pc.backend_type for pc in self.config.players))
-        has_probe = any(pc.probe is not None for pc in self.config.players)
+        has_probe = any(pc.probes is not None for pc in self.config.players)
 
         stats = {
             "game_id": self.game_id,

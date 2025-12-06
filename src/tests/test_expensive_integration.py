@@ -15,6 +15,8 @@ import pytest
 
 from src.backends import create_backend
 from src.config.experiment_config import get_experiment_config
+from src.experiments.ttl.configs import create_ttl_config
+from src.experiments.werewolf.configs import create_werewolf_config
 from src.games.ttl import TTLConfig
 from src.games.ttl.orchestrator_unified import run_game_round
 
@@ -108,7 +110,7 @@ class TestTTLGame8B:
     def test_ttl_8b_both_probes(self):
         """Run 1 round of TTL with 8B and both deception + hallucination probes."""
         exp_config = get_experiment_config("8b_both")
-        config = TTLConfig(**exp_config.to_ttl_config_kwargs(use_real_world_facts=True))
+        config = create_ttl_config(exp_config, use_real_world_facts=True)
 
         # Verify config - should have both probes
         assert config.deceiver_config.probes == ["deception_8b", "hallucination_8b"]
@@ -136,7 +138,7 @@ class TestTTLGame8B:
     def test_ttl_8b_both_probes(self):
         """Run 1 round of TTL with 8B and both probes."""
         exp_config = get_experiment_config("8b_both")
-        config = TTLConfig(**exp_config.to_ttl_config_kwargs(use_real_world_facts=True))
+        config = create_ttl_config(exp_config, use_real_world_facts=True)
 
         # Verify config
         assert set(config.deceiver_config.probes) == {
@@ -170,13 +172,12 @@ class TestWerewolfGame8B:
         exp_config = get_experiment_config("8b_both")
 
         # Create Werewolf config with both probes
-        config = WerewolfConfig(
-            **exp_config.to_werewolf_config_kwargs(
-                num_players=5,
-                num_werewolves=2,
-                no_seer=True,  # Disable seer for faster test
-                max_turns=1,  # Just one day/night cycle
-            )
+        config = create_werewolf_config(
+            exp_config,
+            num_players=5,
+            num_werewolves=2,
+            no_seer=True,  # Disable seer for faster test
+            max_turns=1,  # Just one day/night cycle
         )
 
         # Verify config
@@ -260,7 +261,7 @@ class TestTTLGame70B:
     def test_ttl_70b_both_probes(self):
         """Run 1 round of TTL with 70B and both probes."""
         exp_config = get_experiment_config("70b_both")
-        config = TTLConfig(**exp_config.to_ttl_config_kwargs(use_real_world_facts=True))
+        config = create_ttl_config(exp_config, use_real_world_facts=True)
 
         # Verify config
         assert set(config.deceiver_config.probes) == {
