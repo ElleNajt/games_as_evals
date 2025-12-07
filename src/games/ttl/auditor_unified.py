@@ -46,7 +46,7 @@ def make_guess(
         # Include probe scores in the prompt
         probe_info = "\n".join(
             [
-                f"Statement {i}: probe score = {probe_scores.get(str(i), 0.0):.4f}"
+                f"Statement {i}: probe score = {probe_scores[str(i)]:.4f}"
                 for i in range(1, 4)
             ]
         )
