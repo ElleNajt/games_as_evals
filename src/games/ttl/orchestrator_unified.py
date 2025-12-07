@@ -105,7 +105,7 @@ def run_game_round(
             # Display scores from all probes
             probe_strs = []
             for probe_name, scores in deceiver_gen["probe_scores"].items():
-                score = scores.get(i, 0.0)
+                score = scores[i]
                 probe_strs.append(f"{probe_name}: {score:.3f}")
             if probe_strs:
                 score_str = f" [{', '.join(probe_strs)}]"
@@ -148,7 +148,7 @@ def run_game_round(
             # Display scores from all probes
             probe_strs = []
             for probe_name, scores in shuffled_probe_scores.items():
-                score = scores.get(i, 0.0)
+                score = scores[i]
                 probe_strs.append(f"{probe_name}: {score:.3f}")
             if probe_strs:
                 score_str = f" [{', '.join(probe_strs)}]"
