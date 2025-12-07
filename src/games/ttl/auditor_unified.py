@@ -42,6 +42,21 @@ def make_guess(
     """
     statements_text = "\n".join([f"{i + 1}. {s}" for i, s in enumerate(statements)])
 
+    # If using max score strategy and probe scores are available, just pick the max
+    if config.use_max_score_strategy and probe_scores is not None:
+        # Convert string keys to int and find max
+        scores_dict = {
+            int(k) if isinstance(k, str) else k: v for k, v in probe_scores.items()
+        }
+        guess = max(scores_dict.items(), key=lambda x: x[1])[0]
+
+        return {
+            "guess": guess,
+            "has_probe_access": True,
+            "generated_text": f"Max score strategy: picked statement {guess} with score {scores_dict[guess]:.4f}",
+            "prompt": "N/A (max score strategy)",
+        }
+
     if probe_scores is not None:
         # Include probe scores in the prompt
         probe_info = "\n".join(

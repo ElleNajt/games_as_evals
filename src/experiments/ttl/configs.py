@@ -12,6 +12,7 @@ from src.games.ttl.config import TTLPlayerConfig
 def create_ttl_config(
     exp_config: ExperimentConfig,
     use_real_world_facts: bool = True,
+    use_max_score_strategy: bool = False,
     **game_specific_kwargs,
 ) -> TTLConfig:
     """
@@ -20,6 +21,7 @@ def create_ttl_config(
     Args:
         exp_config: Experiment configuration (model, probes, etc.)
         use_real_world_facts: Whether deceiver uses real-world facts
+        use_max_score_strategy: If True, auditor just picks statement with highest probe score
         **game_specific_kwargs: Additional game-specific settings
 
     Returns:
@@ -41,6 +43,7 @@ def create_ttl_config(
     # Auditor config
     auditor_config = TTLPlayerConfig(
         role="auditor",
+        use_max_score_strategy=use_max_score_strategy,
         **exp_config.to_player_config_kwargs(
             "Auditor", "Identify which statement is the lie."
         ),

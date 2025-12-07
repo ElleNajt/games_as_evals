@@ -63,6 +63,12 @@ def add_ttl_arguments(parser: argparse.ArgumentParser) -> argparse.ArgumentParse
         help="Use fictional facts instead of real-world facts",
     )
 
+    ttl_group.add_argument(
+        "--use-max-score-strategy",
+        action="store_true",
+        help="Auditor picks statement with highest probe score (no LLM interpretation)",
+    )
+
     return parser
 
 

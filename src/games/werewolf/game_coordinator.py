@@ -7,6 +7,7 @@ Manages the game flow, calls agents for decisions, and tracks state.
 import json
 import random
 import shutil
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -675,10 +676,10 @@ Output format: {self.get_output_format("strategy", "name", player_name=ww.name)}
             self.log(f"\nWerewolf votes: {ww_votes}")
 
             # Count votes and determine victim
-            vote_counts = {}
-            for voter, target in ww_votes.items():
-                if target in other_players:
-                    vote_counts[target] = vote_counts.get(target, 0) + 1
+            valid_votes = [
+                target for target in ww_votes.values() if target in other_players
+            ]
+            vote_counts = Counter(valid_votes)
 
             if vote_counts:
                 # If there's a tie or disagreement, choose randomly from voted targets
@@ -1007,9 +1008,7 @@ Output format: {self.get_output_format("vote analysis", "name")}"""
             self.log(f"{player.name} votes for: {vote}")
 
         # Count votes
-        vote_counts = {}
-        for voter, target in votes.items():
-            vote_counts[target] = vote_counts.get(target, 0) + 1
+        vote_counts = Counter(votes.values())
 
         # Find player with most votes
         if vote_counts:
