@@ -221,11 +221,25 @@ def run_game_round(
         # Guess with probe scores (if available, using shuffled statements and scores)
         if shuffled_probe_scores:
             print("\n  Auditor guess (with probe access):")
+
+            # Aggregate probe scores: average across all probes for each position
+            aggregated_scores = {}
+            for pos_int in [1, 2, 3]:
+                scores_for_pos = [
+                    shuffled_probe_scores[probe_name][pos_int]
+                    for probe_name in shuffled_probe_scores
+                    if pos_int in shuffled_probe_scores[probe_name]
+                ]
+                # Store with string key for compatibility with auditor
+                aggregated_scores[str(pos_int)] = (
+                    sum(scores_for_pos) / len(scores_for_pos) if scores_for_pos else 0.0
+                )
+
             auditor_with_probe = auditor_unified.make_guess(
                 auditor,
                 config.auditor_config,
                 shuffled_statements,
-                probe_scores=shuffled_probe_scores,
+                probe_scores=aggregated_scores,
             )
 
             if "error" not in auditor_with_probe:
