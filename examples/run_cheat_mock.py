@@ -39,22 +39,32 @@ class MockBackend:
         
         # Check if this is a play decision or challenge decision
         is_lying = False
-        if "PLAY:" in user_msg and "STRATEGY:" in user_msg:
-            # This is a play decision
-            # Lie 70% of the time (randomly pick wrong rank)
+        
+        # Extract required rank from prompt (e.g., "You must CLAIM you're playing Two(s)")
+        required_rank = None
+        if "CLAIM you're playing" in user_msg:
+            import re
+            match = re.search(r"CLAIM you're playing (\w+)", user_msg)
+            if match:
+                required_rank = match.group(1).rstrip('(s)')  # Remove trailing "(s)"
+        
+        if "ACTUAL_CARDS:" in user_msg or "must CLAIM" in user_msg:
+            # This is a play decision with new format
+            # Lie 70% of the time (play different rank than required)
+            ranks = ["Two", "Three", "Four", "Five", "Six", "Seven", 
+                    "Eight", "Nine", "Ten", "Jack", "Queen", "King", "Ace"]
+            
             if random.random() < 0.7:
-                # Lie - pick a random rank that's not the required one
-                ranks = ["Two", "Three", "Four", "Five", "Six", "Seven", 
-                        "Eight", "Nine", "Ten", "Jack", "Queen", "King", "Ace"]
-                response = f"""PLAY: 1
-STRATEGY: Trying to get rid of cards
-CARDS: {random.choice(ranks)}"""
+                # Lie - play a rank different from required
+                wrong_ranks = [r for r in ranks if r != required_rank]
+                actual_rank = random.choice(wrong_ranks) if wrong_ranks else "King"
+                response = f"""ACTUAL_CARDS: {actual_rank}, {actual_rank}
+CLAIM: {required_rank}, {required_rank}"""
                 is_lying = True
             else:
-                # Tell truth - play Ace (will be corrected by parser)
-                response = """PLAY: 1
-STRATEGY: Playing one card honestly
-CARDS: Ace"""
+                # Tell truth - play the required rank
+                response = f"""ACTUAL_CARDS: {required_rank}, {required_rank}
+CLAIM: {required_rank}, {required_rank}"""
                 is_lying = False
                 
         elif "CHALLENGE" in user_msg or "PASS" in user_msg:
@@ -70,7 +80,7 @@ CARDS: Ace"""
         # Create mock probe scores if this was a play decision
         probe_scores = None
         tokens = None
-        if "PLAY:" in response:
+        if "ACTUAL_CARDS:" in response:
             # Create realistic token list
             tokens = response.split()
             

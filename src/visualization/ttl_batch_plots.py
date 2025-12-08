@@ -56,34 +56,56 @@ def get_avg_probe_scores(game: Dict[str, Any]) -> Dict[str, float]:
 
 
 def plot_probe_score_distributions(data: Dict[str, Any], output_dir: Path) -> Path:
-    """Plot probe score distributions for lies vs truths."""
+    """Plot probe score distributions for lies vs truths, separated by probe."""
     games = data["games"]
 
-    lie_scores = []
-    truth_scores = []
+    # Collect scores per probe
+    probe_data = {}  # probe_name -> {"lies": [...], "truths": [...]}
 
     for game in games:
         lie_pos = game["revealed_lie"]
-        avg_scores = get_avg_probe_scores(game)
+        probe_scores = game["deceiver_generation"]["probe_scores"]
 
-        for pos, score in avg_scores.items():
-            if int(pos) == lie_pos:
-                lie_scores.append(score)
-            else:
-                truth_scores.append(score)
+        for probe_name, scores in probe_scores.items():
+            if probe_name not in probe_data:
+                probe_data[probe_name] = {"lies": [], "truths": []}
 
-    fig, ax = plt.subplots(figsize=(10, 6))
+            for pos, score in scores.items():
+                if int(pos) == lie_pos:
+                    probe_data[probe_name]["lies"].append(score)
+                else:
+                    probe_data[probe_name]["truths"].append(score)
 
-    # Create histogram
-    bins = np.linspace(0.5, 1.0, 20)
-    ax.hist(truth_scores, bins=bins, alpha=0.6, label="Truths", color="green")
-    ax.hist(lie_scores, bins=bins, alpha=0.6, label="Lies", color="red")
+    # Create subplots - one per probe
+    num_probes = len(probe_data)
+    fig, axes = plt.subplots(1, num_probes, figsize=(7 * num_probes, 6))
+    if num_probes == 1:
+        axes = [axes]
 
-    ax.set_xlabel("Probe Score", fontsize=12)
-    ax.set_ylabel("Frequency", fontsize=12)
-    ax.set_title("Probe Score Distribution: Lies vs Truths", fontsize=14)
-    ax.legend(fontsize=11)
-    ax.grid(True, alpha=0.3)
+    for ax, (probe_name, scores) in zip(axes, probe_data.items()):
+        lie_scores = scores["lies"]
+        truth_scores = scores["truths"]
+
+        # Create bins based on actual data range
+        all_scores = lie_scores + truth_scores
+        if all_scores:
+            min_score = min(all_scores)
+            max_score = max(all_scores)
+            padding = (max_score - min_score) * 0.1
+            bins = np.linspace(
+                max(0, min_score - padding), min(1.0, max_score + padding), 20
+            )
+        else:
+            bins = np.linspace(0, 1.0, 20)
+
+        ax.hist(truth_scores, bins=bins, alpha=0.6, label="Truths", color="green")
+        ax.hist(lie_scores, bins=bins, alpha=0.6, label="Lies", color="red")
+
+        ax.set_xlabel("Probe Score", fontsize=12)
+        ax.set_ylabel("Frequency", fontsize=12)
+        ax.set_title(f"{probe_name}: Lies vs Truths", fontsize=14)
+        ax.legend(fontsize=11)
+        ax.grid(True, alpha=0.3)
 
     output_path = output_dir / "probe_score_distribution.png"
     plt.tight_layout()
