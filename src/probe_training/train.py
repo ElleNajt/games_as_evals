@@ -173,16 +173,84 @@ def register_probe(
 
 def train_probe_modal(config: TrainingConfig) -> Path:
     """Train a probe on Modal (distributed GPU).
-    
-    TODO: Implement Modal training
-    
+
     Args:
         config: Training configuration
-        
+
     Returns:
         Path to trained probe file
     """
-    raise NotImplementedError("Modal training not yet implemented")
+    import modal
+
+    print("=" * 70)
+    print("Training probe on Modal GPU infrastructure")
+    print("=" * 70)
+    print()
+
+    # Import Modal app
+    from modal_deployments.probe_training_service import train_probe_on_modal
+
+    # Check if dataset is on volume
+    print(f"Checking if dataset '{config.dataset_name}' is on Modal volume...")
+
+    # For now, assume dataset is uploaded (we'll handle upload separately)
+    # In the future, we could auto-upload if not present
+
+    print(f"Launching Modal training job...")
+    print(f"  Dataset:  {config.dataset_name}")
+    print(f"  Model:    {config.model}")
+    print(f"  Method:   {config.method}")
+    print(f"  Layer:    {config.layer}")
+    print()
+
+    # Call Modal function
+    result = train_probe_on_modal.remote(
+        dataset_name=config.dataset_name,
+        model_name=config.model,
+        method=config.method,
+        layer=config.layer,
+        learning_rate=config.learning_rate,
+        num_epochs=config.num_epochs,
+        batch_size=config.batch_size,
+        seed=config.seed,
+    )
+
+    print()
+    print("=" * 70)
+    print("Modal Training Complete!")
+    print("=" * 70)
+    print(f"Probe name: {result['probe_name']}")
+    print(f"Metrics:")
+    for key, value in result['metrics'].items():
+        print(f"  - {key}: {value:.4f}")
+    print(f"Volume path: {result['volume_path']}")
+    print()
+
+    # The probe is saved on Modal volume, not locally
+    # Return a placeholder path indicating it's on volume
+    volume_path = Path(result['volume_path'])
+
+    # Save a local metadata file pointing to the Modal volume location
+    workspace_root = Path(__file__).parent.parent.parent
+    local_metadata_dir = workspace_root / "probes" / config.generate_probe_name()
+    local_metadata_dir.mkdir(parents=True, exist_ok=True)
+
+    metadata_file = local_metadata_dir / "modal_location.json"
+    with open(metadata_file, 'w') as f:
+        json.dump({
+            "probe_name": result['probe_name'],
+            "volume_path": result['volume_path'],
+            "metrics": result['metrics'],
+            "dataset": config.dataset_name,
+            "model": config.model,
+            "method": config.method,
+            "layer": config.layer,
+        }, f, indent=2)
+
+    print(f"Saved Modal location metadata to: {metadata_file}")
+    print()
+
+    return metadata_file
 
 
 def upload_probe_to_hf(probe_path: Path, metadata: ProbeMetadata, hf_repo: str):
@@ -239,10 +307,11 @@ def main():
     )
     
     # Train probe
-    if args.local or True:  # Default to local for now
+    if args.local:
         output_dir = Path(args.output_dir) if args.output_dir else None
         probe_path = train_probe_local(config, output_dir)
     else:
+        # Default to Modal training
         probe_path = train_probe_modal(config)
     
     # Register if requested
