@@ -52,14 +52,14 @@ def train_probe_local(config: TrainingConfig, output_dir: Optional[Path] = None)
     print()
     
     # 1. Load dataset
-    print("Step 1/4: Loading dataset...")
+    print("Step 1/5: Loading dataset...")
     dataset = Dataset(config.dataset_name)
     train_data = dataset.load("train")
     print(f"  ✓ Loaded {len(train_data)} training examples")
     print()
     
     # 2. Load model and extract activations
-    print(f"Step 2/4: Extracting activations from {config.model}...")
+    print(f"Step 2/5: Extracting activations from {config.model}...")
     print(f"  (This may take several minutes)")
     model, tokenizer = load_model_and_tokenizer(config.model, device=config.device)
     
@@ -80,7 +80,7 @@ def train_probe_local(config: TrainingConfig, output_dir: Optional[Path] = None)
     torch.cuda.empty_cache() if config.device == "cuda" else None
     
     # 3. Train probe
-    print(f"Step 3/4: Training probe with {config.method}...")
+    print(f"Step 3/5: Training probe with {config.method}...")
     training_fn = get_training_method(config.method)
     
     probe_weights, metrics = training_fn(activation_data, config)
@@ -92,7 +92,7 @@ def train_probe_local(config: TrainingConfig, output_dir: Optional[Path] = None)
     print()
     
     # 4. Save probe
-    print("Step 4/4: Saving probe...")
+    print("Step 4/5: Saving probe...")
     
     # Determine output directory
     if output_dir is None:
@@ -120,11 +120,20 @@ def train_probe_local(config: TrainingConfig, output_dir: Optional[Path] = None)
     print(f"  ✓ Saved probe to: {probe_path}")
     print(f"  ✓ Saved config to: {config_path}")
     print()
-    
+
+    # Auto-register probe
+    print("Step 5/5: Registering probe...")
+    register_probe(
+        probe_path=probe_path,
+        config=config,
+        metrics=metrics
+    )
+    print()
+
     print("=" * 70)
     print("✓✓✓ TRAINING COMPLETE! ✓✓✓")
     print("=" * 70)
-    
+
     return probe_path
 
 
@@ -133,22 +142,24 @@ def register_probe(
     config: TrainingConfig,
     metrics: dict,
     hf_repo: Optional[str] = None,
+    modal_path: Optional[str] = None,
     git_tag: Optional[str] = None
 ):
     """Register a trained probe in the registry.
-    
+
     Args:
-        probe_path: Path to trained probe file
+        probe_path: Path to trained probe file (local)
         config: Training configuration
         metrics: Training metrics
         hf_repo: Optional HuggingFace repo
+        modal_path: Optional path on Modal volume
         git_tag: Optional git tag for this version
     """
     print("Registering probe in registry...")
-    
+
     # Compute checksum
     checksum = compute_probe_checksum(probe_path)
-    
+
     # Create metadata
     metadata = ProbeMetadata(
         name=config.generate_probe_name(),
@@ -159,16 +170,21 @@ def register_probe(
         checksum=checksum,
         created_at=datetime.now().isoformat(),
         hf_repo=hf_repo,
+        modal_path=modal_path,
         metrics=metrics,
         git_tag=git_tag
     )
-    
+
     # Register
     registry = ProbeRegistry()
     registry.register_probe(metadata)
-    
+
     print(f"  ✓ Registered probe: {metadata.name}")
     print(f"  Checksum: {checksum}")
+    if modal_path:
+        print(f"  Modal path: {modal_path}")
+    if hf_repo:
+        print(f"  HuggingFace: {hf_repo}")
 
 
 def train_probe_modal(config: TrainingConfig) -> Path:
@@ -248,6 +264,31 @@ def train_probe_modal(config: TrainingConfig) -> Path:
         }, f, indent=2)
 
     print(f"Saved Modal location metadata to: {metadata_file}")
+    print()
+
+    # Download probe temporarily to compute checksum and register
+    print("Registering probe...")
+    from modal_deployments.probe_training_service import download_probe_from_volume
+
+    # Download to temporary location
+    temp_probe_path = local_metadata_dir / "probe.pt"
+    probe_data = download_probe_from_volume.remote(
+        probe_name=result['probe_name'],
+        modal_path=result['volume_path'],
+        local_path=str(temp_probe_path)
+    )
+
+    # Save temporarily
+    with open(temp_probe_path, 'wb') as f:
+        f.write(probe_data)
+
+    # Register with Modal path
+    register_probe(
+        probe_path=temp_probe_path,
+        config=config,
+        metrics=result['metrics'],
+        modal_path=result['volume_path']
+    )
     print()
 
     return metadata_file

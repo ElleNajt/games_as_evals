@@ -484,6 +484,37 @@ def train_probe_on_modal(
 @app.function(
     volumes={VOLUME_PATH: VOLUME},
 )
+def download_probe_from_volume(probe_name: str, modal_path: str, local_path: str):
+    """Download a trained probe from Modal volume to local machine.
+
+    Args:
+        probe_name: Name of the probe
+        modal_path: Path on Modal volume (e.g., /volume/models/probes/probe_name)
+        local_path: Local path to save probe file
+    """
+    from pathlib import Path
+
+    print(f"Downloading probe '{probe_name}' from Modal volume...")
+
+    # Read probe file from volume
+    volume_probe_path = Path(modal_path) / "probe.pt"
+
+    if not volume_probe_path.exists():
+        raise FileNotFoundError(f"Probe not found on volume: {volume_probe_path}")
+
+    # Read the probe file
+    with open(volume_probe_path, 'rb') as f:
+        probe_data = f.read()
+
+    print(f"  ✓ Read probe from volume: {len(probe_data)} bytes")
+
+    # Return the data (Modal will handle sending it back)
+    return probe_data
+
+
+@app.function(
+    volumes={VOLUME_PATH: VOLUME},
+)
 def upload_dataset_files(dataset_name: str, files_data: Dict[str, str]):
     """Upload dataset files to Modal volume.
 

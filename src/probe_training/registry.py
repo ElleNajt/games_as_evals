@@ -11,7 +11,7 @@ from datetime import datetime
 @dataclass
 class ProbeMetadata:
     """Metadata for a trained probe.
-    
+
     Attributes:
         name: Probe name (e.g., "roleplaying-llama8b-linear-contrastive")
         dataset: Dataset name used for training
@@ -21,6 +21,7 @@ class ProbeMetadata:
         checksum: SHA256 checksum of probe weights file
         created_at: ISO timestamp of creation
         hf_repo: HuggingFace repo where probe is stored (optional)
+        modal_path: Path on Modal volume where probe is stored (optional)
         metrics: Training metrics (loss, accuracy, etc.)
         git_tag: Git tag for this probe version (optional)
     """
@@ -32,6 +33,7 @@ class ProbeMetadata:
     checksum: str
     created_at: str
     hf_repo: Optional[str] = None
+    modal_path: Optional[str] = None
     metrics: Optional[Dict] = None
     git_tag: Optional[str] = None
 
@@ -137,17 +139,68 @@ class ProbeRegistry:
         return probe_path
     
     def _download_probe(self, metadata: ProbeMetadata, target_path: Path):
-        """Download probe from HuggingFace.
-        
+        """Download probe from Modal volume or HuggingFace.
+
         Args:
             metadata: Probe metadata
             target_path: Local path to save probe
         """
-        if not metadata.hf_repo:
-            raise ValueError(f"No HuggingFace repo specified for probe: {metadata.name}")
-        
+        # Try Modal volume first
+        if metadata.modal_path:
+            print(f"Downloading probe from Modal volume: {metadata.modal_path}")
+            self._download_from_modal(metadata, target_path)
+            return
+
+        # Fall back to HuggingFace
+        if metadata.hf_repo:
+            print(f"Downloading probe from HuggingFace: {metadata.hf_repo}")
+            self._download_from_hf(metadata, target_path)
+            return
+
+        raise ValueError(
+            f"No download source specified for probe: {metadata.name}\n"
+            f"Need either modal_path or hf_repo"
+        )
+
+    def _download_from_modal(self, metadata: ProbeMetadata, target_path: Path):
+        """Download probe from Modal volume.
+
+        Args:
+            metadata: Probe metadata
+            target_path: Local path to save probe
+        """
+        try:
+            from modal_deployments.probe_training_service import download_probe_from_volume
+
+            # Ensure parent directory exists
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # Download from Modal (returns probe data bytes)
+            probe_data = download_probe_from_volume.remote(
+                probe_name=metadata.name,
+                modal_path=metadata.modal_path,
+                local_path=str(target_path)
+            )
+
+            # Save the data locally
+            with open(target_path, 'wb') as f:
+                f.write(probe_data)
+
+            print(f"  ✓ Saved probe to: {target_path}")
+
+        except ImportError:
+            raise ValueError("Modal not available. Cannot download probe from volume.")
+        except Exception as e:
+            raise ValueError(f"Failed to download probe from Modal: {e}")
+
+    def _download_from_hf(self, metadata: ProbeMetadata, target_path: Path):
+        """Download probe from HuggingFace.
+
+        Args:
+            metadata: Probe metadata
+            target_path: Local path to save probe
+        """
         # TODO: Implement HuggingFace download
-        # For now, this is a stub
         raise NotImplementedError("HuggingFace download not yet implemented")
     
     def _verify_probe(self, probe_path: Path, expected_checksum: str) -> bool:
