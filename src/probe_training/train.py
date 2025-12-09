@@ -16,8 +16,10 @@ from typing import Optional
 
 from .config import TrainingConfig
 from .dataset import Dataset
-from .methods import get_training_method
 from .registry import ProbeRegistry, ProbeMetadata
+
+# Import heavy dependencies directly from submodules
+from .methods import get_training_method
 from .activations import extract_contrastive_activations, load_model_and_tokenizer
 
 
