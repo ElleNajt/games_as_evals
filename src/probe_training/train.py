@@ -1,76 +1,200 @@
 """Modal training app and CLI for probe training.
 
 This module provides:
-- Modal app for distributed GPU training
+- Local training for testing/development
 - CLI for launching training jobs
 - Integration with probe registry
 """
 
 import argparse
+import torch
+import hashlib
+import json
 from pathlib import Path
+from datetime import datetime
 from typing import Optional
-
-# Modal imports will be added when implementing
-# import modal
 
 from .config import TrainingConfig
 from .dataset import Dataset
 from .methods import get_training_method
 from .registry import ProbeRegistry, ProbeMetadata
+from .activations import extract_contrastive_activations, load_model_and_tokenizer
 
 
-def train_probe_local(config: TrainingConfig) -> Path:
+def compute_probe_checksum(probe_path: Path) -> str:
+    """Compute SHA256 checksum of probe file."""
+    sha256 = hashlib.sha256()
+    with open(probe_path, 'rb') as f:
+        for chunk in iter(lambda: f.read(8192), b''):
+            sha256.update(chunk)
+    return sha256.hexdigest()
+
+
+def train_probe_local(config: TrainingConfig, output_dir: Optional[Path] = None) -> Path:
     """Train a probe locally (for testing/development).
     
     Args:
         config: Training configuration
+        output_dir: Where to save the probe (defaults to probes/)
         
     Returns:
         Path to trained probe file
     """
-    print(f"Training probe: {config.generate_probe_name()}")
-    print(f"  Dataset: {config.dataset_name}")
-    print(f"  Model: {config.model}")
-    print(f"  Method: {config.method}")
-    print(f"  Layer: {config.layer}")
+    print("=" * 70)
+    print(f"Training Probe: {config.generate_probe_name()}")
+    print("=" * 70)
+    print(f"Dataset:  {config.dataset_name}")
+    print(f"Model:    {config.model}")
+    print(f"Method:   {config.method}")
+    print(f"Layer:    {config.layer}")
+    print(f"Device:   {config.device}")
+    print("=" * 70)
+    print()
     
-    # Load dataset
+    # 1. Load dataset
+    print("Step 1/4: Loading dataset...")
     dataset = Dataset(config.dataset_name)
     train_data = dataset.load("train")
-    print(f"  Loaded {len(train_data)} training examples")
+    print(f"  ✓ Loaded {len(train_data)} training examples")
+    print()
     
-    # Get training method
+    # 2. Load model and extract activations
+    print(f"Step 2/4: Extracting activations from {config.model}...")
+    print(f"  (This may take several minutes)")
+    model, tokenizer = load_model_and_tokenizer(config.model, device=config.device)
+    
+    activation_data = extract_contrastive_activations(
+        model=model,
+        tokenizer=tokenizer,
+        dataset_pairs=train_data,
+        layer=config.layer,
+        batch_size=config.batch_size,
+        device=config.device,
+        verbose=True
+    )
+    print(f"  ✓ Extracted activations: {activation_data.positive_acts.shape}")
+    print()
+    
+    # Free up memory
+    del model
+    torch.cuda.empty_cache() if config.device == "cuda" else None
+    
+    # 3. Train probe
+    print(f"Step 3/4: Training probe with {config.method}...")
     training_fn = get_training_method(config.method)
     
-    # Train probe (stub - needs activation extraction)
-    # probe_weights, metrics = training_fn(dataset, config, activations_fn=None)
+    probe_weights, metrics = training_fn(activation_data, config)
     
-    # TODO: Implement actual training
-    raise NotImplementedError("Probe training not yet implemented")
+    print(f"  ✓ Training complete!")
+    print(f"  Metrics:")
+    for key, value in metrics.items():
+        print(f"    - {key}: {value:.4f}")
+    print()
+    
+    # 4. Save probe
+    print("Step 4/4: Saving probe...")
+    
+    # Determine output directory
+    if output_dir is None:
+        workspace_root = Path(__file__).parent.parent.parent
+        output_dir = workspace_root / "probes" / config.generate_probe_name()
+    
+    output_dir.mkdir(parents=True, exist_ok=True)
+    probe_path = output_dir / "probe.pt"
+    
+    # Save probe weights
+    torch.save(probe_weights, probe_path)
+    
+    # Save config and metrics
+    config_path = output_dir / "config.json"
+    with open(config_path, 'w') as f:
+        json.dump({
+            "dataset": config.dataset_name,
+            "model": config.model,
+            "method": config.method,
+            "layer": config.layer,
+            "metrics": metrics,
+            "created_at": datetime.now().isoformat(),
+        }, f, indent=2)
+    
+    print(f"  ✓ Saved probe to: {probe_path}")
+    print(f"  ✓ Saved config to: {config_path}")
+    print()
+    
+    print("=" * 70)
+    print("✓✓✓ TRAINING COMPLETE! ✓✓✓")
+    print("=" * 70)
+    
+    return probe_path
+
+
+def register_probe(
+    probe_path: Path,
+    config: TrainingConfig,
+    metrics: dict,
+    hf_repo: Optional[str] = None,
+    git_tag: Optional[str] = None
+):
+    """Register a trained probe in the registry.
+    
+    Args:
+        probe_path: Path to trained probe file
+        config: Training configuration
+        metrics: Training metrics
+        hf_repo: Optional HuggingFace repo
+        git_tag: Optional git tag for this version
+    """
+    print("Registering probe in registry...")
+    
+    # Compute checksum
+    checksum = compute_probe_checksum(probe_path)
+    
+    # Create metadata
+    metadata = ProbeMetadata(
+        name=config.generate_probe_name(),
+        dataset=config.dataset_name,
+        model=config.model,
+        method=config.method,
+        layer=config.layer,
+        checksum=checksum,
+        created_at=datetime.now().isoformat(),
+        hf_repo=hf_repo,
+        metrics=metrics,
+        git_tag=git_tag
+    )
+    
+    # Register
+    registry = ProbeRegistry()
+    registry.register_probe(metadata)
+    
+    print(f"  ✓ Registered probe: {metadata.name}")
+    print(f"  Checksum: {checksum}")
 
 
 def train_probe_modal(config: TrainingConfig) -> Path:
     """Train a probe on Modal (distributed GPU).
     
+    TODO: Implement Modal training
+    
     Args:
         config: Training configuration
         
     Returns:
         Path to trained probe file
     """
-    # TODO: Implement Modal training
     raise NotImplementedError("Modal training not yet implemented")
 
 
 def upload_probe_to_hf(probe_path: Path, metadata: ProbeMetadata, hf_repo: str):
     """Upload trained probe to HuggingFace.
     
+    TODO: Implement HuggingFace upload
+    
     Args:
         probe_path: Path to probe file
         metadata: Probe metadata
         hf_repo: HuggingFace repository name
     """
-    # TODO: Implement HuggingFace upload
     raise NotImplementedError("HuggingFace upload not yet implemented")
 
 
@@ -87,13 +211,17 @@ def main():
     # Optional arguments
     parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate")
     parser.add_argument("--epochs", type=int, default=10, help="Number of epochs")
-    parser.add_argument("--batch-size", type=int, default=32, help="Batch size")
+    parser.add_argument("--batch-size", type=int, default=8, help="Batch size")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
+    parser.add_argument("--device", default="cuda", help="Device (cuda/cpu)")
     
     # Execution options
     parser.add_argument("--local", action="store_true", help="Train locally (for testing)")
+    parser.add_argument("--output-dir", help="Output directory for probe")
+    parser.add_argument("--register", action="store_true", help="Register probe in registry")
     parser.add_argument("--upload", action="store_true", help="Upload to HuggingFace")
     parser.add_argument("--hf-repo", help="HuggingFace repository")
+    parser.add_argument("--git-tag", help="Git tag for this probe version")
     
     args = parser.parse_args()
     
@@ -106,16 +234,35 @@ def main():
         learning_rate=args.lr,
         num_epochs=args.epochs,
         batch_size=args.batch_size,
-        seed=args.seed
+        seed=args.seed,
+        device=args.device
     )
     
     # Train probe
-    if args.local:
-        probe_path = train_probe_local(config)
+    if args.local or True:  # Default to local for now
+        output_dir = Path(args.output_dir) if args.output_dir else None
+        probe_path = train_probe_local(config, output_dir)
     else:
         probe_path = train_probe_modal(config)
     
-    print(f"\nProbe trained successfully: {probe_path}")
+    # Register if requested
+    if args.register:
+        # TODO: Load metrics from saved config
+        metrics_file = probe_path.parent / "config.json"
+        if metrics_file.exists():
+            with open(metrics_file, 'r') as f:
+                data = json.load(f)
+                metrics = data.get("metrics", {})
+        else:
+            metrics = {}
+        
+        register_probe(
+            probe_path=probe_path,
+            config=config,
+            metrics=metrics,
+            hf_repo=args.hf_repo,
+            git_tag=args.git_tag
+        )
     
     # Upload if requested
     if args.upload:
@@ -123,8 +270,8 @@ def main():
             print("ERROR: --hf-repo required for upload")
             return 1
         
-        # TODO: Generate metadata and upload
         print(f"Uploading to HuggingFace: {args.hf_repo}")
+        # TODO: Implement upload
     
     return 0
 
