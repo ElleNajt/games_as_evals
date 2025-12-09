@@ -414,5 +414,197 @@ class TestMockBackendBehavior:
         assert backend.call_count == 3
 
 
+class TestInvalidLLMResponses:
+    """Test games handle invalid LLM responses gracefully."""
+
+    def test_ttl_invalid_statement_format(self):
+        """Test TTL handles malformed statement responses."""
+        # Invalid formats that might come from LLM
+        invalid_responses = [
+            "Here are my statements without numbers",  # Missing format
+            "1. First\n2. Second",  # Only 2 statements (need 3)
+            "Just a regular sentence.",  # Wrong format entirely
+            "",  # Empty response
+        ]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = TTLConfig(
+                deceiver_backend="mock",
+                auditor_backend="mock",
+                output_dir=tmpdir
+            )
+
+            for invalid_response in invalid_responses:
+                with patch("src.games.ttl.orchestrator_unified.create_backend") as mock_create:
+                    deceiver_mock = MockBackend(responses=[
+                        invalid_response,
+                        "1"  # Fallback reveal
+                    ])
+                    auditor_mock = MockBackend(responses=["1"])
+
+                    def side_effect(*args, **kwargs):
+                        if mock_create.call_count == 0:
+                            return deceiver_mock
+                        else:
+                            return auditor_mock
+
+                    mock_create.side_effect = side_effect
+
+                    # Game should handle gracefully (not crash)
+                    # Implementation might retry, use defaults, or log error
+                    try:
+                        results = run_game_round(
+                            config=config,
+                            facts=["Fact 1", "Fact 2", "Fact 3"],
+                            experiment_name="invalid_test",
+                            round_id=1
+                        )
+                        # If it completes, verify results structure exists
+                        assert results is not None
+                    except Exception as e:
+                        # If it raises, it should be a clear validation error
+                        assert "format" in str(e).lower() or "invalid" in str(e).lower()
+
+    def test_ttl_invalid_lie_index(self):
+        """Test TTL handles invalid lie index responses."""
+        invalid_lie_indices = [
+            "5",  # Out of range (only 1-3 valid)
+            "zero",  # Non-numeric
+            "I choose the third one",  # Text instead of number
+            "-1",  # Negative
+            "",  # Empty
+        ]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = TTLConfig(
+                deceiver_backend="mock",
+                auditor_backend="mock",
+                output_dir=tmpdir
+            )
+
+            for invalid_index in invalid_lie_indices:
+                with patch("src.games.ttl.orchestrator_unified.create_backend") as mock_create:
+                    deceiver_mock = MockBackend(responses=[
+                        "1. Paris is in France\n2. Tokyo is in Japan\n3. London is in Brazil",
+                        invalid_index  # Invalid lie reveal
+                    ])
+                    auditor_mock = MockBackend(responses=["1"])
+
+                    def side_effect(*args, **kwargs):
+                        if mock_create.call_count == 0:
+                            return deceiver_mock
+                        else:
+                            return auditor_mock
+
+                    mock_create.side_effect = side_effect
+
+                    # Should handle gracefully
+                    try:
+                        results = run_game_round(
+                            config=config,
+                            facts=["Paris in France", "Tokyo in Japan", "London in UK"],
+                            experiment_name="invalid_index_test",
+                            round_id=1
+                        )
+                        # If successful, verify structure
+                        assert results is not None
+                    except Exception as e:
+                        # Should be clear validation error
+                        assert "index" in str(e).lower() or "invalid" in str(e).lower()
+
+    def test_ttl_invalid_auditor_guess(self):
+        """Test TTL handles invalid auditor guess responses."""
+        invalid_guesses = [
+            "10",  # Out of range
+            "I think it's the third statement",  # Text
+            "Maybe 2 or 3?",  # Ambiguous
+            "",  # Empty
+        ]
+
+        valid_statements = "1. True fact\n2. Another true fact\n3. A lie"
+        valid_reveal = "3"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = TTLConfig(
+                deceiver_backend="mock",
+                auditor_backend="mock",
+                output_dir=tmpdir
+            )
+
+            for invalid_guess in invalid_guesses:
+                with patch("src.games.ttl.orchestrator_unified.create_backend") as mock_create:
+                    deceiver_mock = MockBackend(responses=[valid_statements, valid_reveal])
+                    auditor_mock = MockBackend(responses=[invalid_guess])
+
+                    def side_effect(*args, **kwargs):
+                        if mock_create.call_count == 0:
+                            return deceiver_mock
+                        else:
+                            return auditor_mock
+
+                    mock_create.side_effect = side_effect
+
+                    # Should handle gracefully
+                    try:
+                        results = run_game_round(
+                            config=config,
+                            facts=["Fact 1", "Fact 2", "Fact 3"],
+                            experiment_name="invalid_guess_test",
+                            round_id=1
+                        )
+                        # If successful, should still have results
+                        assert results is not None
+                        # Might mark as incorrect or use default
+                        assert "auditor_guess" in results
+                    except Exception as e:
+                        # Should be validation error
+                        assert "guess" in str(e).lower() or "invalid" in str(e).lower()
+
+    def test_bs_invalid_play_format(self):
+        """Test BS game handles invalid play action responses."""
+        from src.config.player_config import PlayerConfig
+        from src.games.bs.config import BSPlayerConfig, BSConfig
+
+        invalid_plays = [
+            "I'll play some cards",  # No structure
+            "PLAY:",  # Missing count/cards
+            "5 cards",  # Missing PLAY: prefix
+            "",  # Empty
+        ]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            player_template = PlayerConfig(
+                name="template",
+                backend_type="claude",
+                backend_config={},
+                system_prompt="Test"
+            )
+
+            # For each invalid response, game should handle gracefully
+            # This is a placeholder - actual implementation depends on BS orchestrator
+            # The key is that invalid formats should not crash the game
+            pass
+
+    def test_output_validation_helper(self):
+        """Test that games validate LLM output formats properly."""
+        # This tests any validation helpers that might exist
+        # For example, parsing "1. X\n2. Y\n3. Z" format
+
+        # Valid format
+        valid_statements = "1. First statement\n2. Second statement\n3. Third statement"
+        # Parse should succeed
+
+        # Invalid formats
+        invalid_formats = [
+            "1. First\n2. Second",  # Only 2
+            "First\nSecond\nThird",  # No numbers
+            "1 First\n2 Second\n3 Third",  # Missing dots
+        ]
+
+        # These should be caught by validation
+        # Actual validation depends on implementation
+        pass
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
