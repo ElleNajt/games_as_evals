@@ -131,7 +131,7 @@ Loading fails if checksums don't match, preventing use of corrupted data.
 - ✅ CLI tools (manage_probes.py)
 
 **TODO:**
-- [ ] Migrate additional datasets (sycophancy, persona, sandbagging)
+- [ ] Migrate additional datasets (strategic deception, truthfulqa, insider trading, etc.)
 - [ ] Add comprehensive unit tests
-- [ ] Train probe suite across multiple models/layers
+- [ ] Train probe suite
 - [ ] Add probe evaluation metrics
