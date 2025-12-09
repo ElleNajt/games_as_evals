@@ -200,8 +200,35 @@ class ProbeRegistry:
             metadata: Probe metadata
             target_path: Local path to save probe
         """
-        # TODO: Implement HuggingFace download
-        raise NotImplementedError("HuggingFace download not yet implemented")
+        try:
+            from huggingface_hub import hf_hub_download
+
+            # Ensure parent directory exists
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # Download from HuggingFace Hub
+            # Probes are stored at: {repo}/probes/{probe_name}/probe.pt
+            downloaded_path = hf_hub_download(
+                repo_id=metadata.hf_repo,
+                filename=f"probes/{metadata.name}/probe.pt",
+                cache_dir=str(self.cache_dir / ".hf_cache"),
+                local_dir=str(target_path.parent),
+                local_dir_use_symlinks=False
+            )
+
+            # Move to expected location if needed
+            if Path(downloaded_path) != target_path:
+                import shutil
+                shutil.move(downloaded_path, target_path)
+
+            print(f"  ✓ Downloaded from HuggingFace: {metadata.hf_repo}")
+
+        except ImportError:
+            raise ValueError(
+                "HuggingFace Hub not available. Install with: pip install huggingface_hub"
+            )
+        except Exception as e:
+            raise ValueError(f"Failed to download probe from HuggingFace: {e}")
     
     def _verify_probe(self, probe_path: Path, expected_checksum: str) -> bool:
         """Verify probe integrity using checksum.

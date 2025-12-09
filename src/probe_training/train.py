@@ -298,15 +298,57 @@ def train_probe_modal(config: TrainingConfig) -> Path:
 
 def upload_probe_to_hf(probe_path: Path, metadata: ProbeMetadata, hf_repo: str):
     """Upload trained probe to HuggingFace.
-    
-    TODO: Implement HuggingFace upload
-    
+
     Args:
         probe_path: Path to probe file
         metadata: Probe metadata
         hf_repo: HuggingFace repository name
     """
-    raise NotImplementedError("HuggingFace upload not yet implemented")
+    try:
+        from huggingface_hub import HfApi
+
+        print(f"Uploading probe to HuggingFace: {hf_repo}")
+
+        # Initialize HF API
+        api = HfApi()
+
+        # Upload probe file
+        # Store as: {repo}/probes/{probe_name}/probe.pt
+        api.upload_file(
+            path_or_fileobj=str(probe_path),
+            path_in_repo=f"probes/{metadata.name}/probe.pt",
+            repo_id=hf_repo,
+            repo_type="model"
+        )
+
+        # Upload metadata as JSON
+        import tempfile
+        from dataclasses import asdict
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            json.dump(asdict(metadata), f, indent=2)
+            metadata_temp_path = f.name
+
+        try:
+            api.upload_file(
+                path_or_fileobj=metadata_temp_path,
+                path_in_repo=f"probes/{metadata.name}/metadata.json",
+                repo_id=hf_repo,
+                repo_type="model"
+            )
+        finally:
+            Path(metadata_temp_path).unlink()
+
+        print(f"  ✓ Uploaded probe to: https://huggingface.co/{hf_repo}")
+        print(f"  ✓ Files: probes/{metadata.name}/probe.pt")
+        print(f"           probes/{metadata.name}/metadata.json")
+
+    except ImportError:
+        raise ValueError(
+            "HuggingFace Hub not available. Install with: pip install huggingface_hub"
+        )
+    except Exception as e:
+        raise ValueError(f"Failed to upload probe to HuggingFace: {e}")
 
 
 def main():
@@ -381,9 +423,31 @@ def main():
         if not args.hf_repo:
             print("ERROR: --hf-repo required for upload")
             return 1
-        
-        print(f"Uploading to HuggingFace: {args.hf_repo}")
-        # TODO: Implement upload
+
+        # Load metadata for upload
+        metadata_file = probe_path.parent / "config.json"
+        if metadata_file.exists():
+            with open(metadata_file, 'r') as f:
+                data = json.load(f)
+                metrics = data.get("metrics", {})
+        else:
+            metrics = {}
+
+        # Create metadata object
+        metadata = ProbeMetadata(
+            name=config.generate_probe_name(),
+            dataset=config.dataset_name,
+            model=config.model,
+            method=config.method,
+            layer=config.layer,
+            checksum=compute_probe_checksum(probe_path),
+            created_at=data.get("created_at", datetime.now().isoformat()) if metadata_file.exists() else datetime.now().isoformat(),
+            hf_repo=args.hf_repo,
+            metrics=metrics,
+            git_tag=args.git_tag
+        )
+
+        upload_probe_to_hf(probe_path, metadata, args.hf_repo)
     
     return 0
 
