@@ -16,13 +16,15 @@ Key features:
 ## Directory Structure
 
 ```
-src/probes/
+src/probe_training/
 ├── __init__.py              # Module initialization
 ├── config.py                # TrainingConfig dataclass
 ├── dataset.py               # Dataset loading + checksum verification
-├── methods.py               # All training methods (single file)
+├── activations.py           # Activation extraction from transformer layers
+├── methods.py               # All training methods (CCS, Mean Difference, Mass Mean)
 ├── registry.py              # ProbeRegistry for managing probes
-├── train.py                 # Modal training app + CLI
+├── train.py                 # Training CLI + Modal integration
+├── migrate_dataset.py       # Dataset migration utilities
 ├── probe_metadata.json      # Git-tracked probe registry
 └── README.md                # This file
 ```
@@ -33,18 +35,18 @@ src/probes/
 
 ```bash
 # Train locally (for testing)
-python -m src.probes.train \
+python -m src.probe_training.train \
   --dataset roleplaying \
   --model meta-llama/Meta-Llama-3.1-8B-Instruct \
-  --method linear-contrastive \
+  --method ccs \
   --layer 22 \
   --local
 
 # Train on Modal (production)
-python -m src.probes.train \
+python -m src.probe_training.train \
   --dataset roleplaying \
   --model meta-llama/Meta-Llama-3.1-8B-Instruct \
-  --method linear-contrastive \
+  --method ccs \
   --layer 22 \
   --upload \
   --hf-repo your-username/probe-repo
@@ -53,11 +55,11 @@ python -m src.probes.train \
 ### Loading a Probe
 
 ```python
-from src.probes import ProbeRegistry
+from src.probe_training import ProbeRegistry
 
 # Get probe path (downloads if needed, verifies integrity)
 registry = ProbeRegistry()
-probe_path = registry.get_probe_path("roleplaying-llama8b-linear-contrastive")
+probe_path = registry.get_probe_path("roleplaying_Meta-Llama-3.1-8B-Instruct_ccs_layer22")
 
 # Load probe weights
 import torch
@@ -67,8 +69,9 @@ probe_weights = torch.load(probe_path)
 ### Creating a New Dataset
 
 ```python
-from src.probes import Dataset
+from src.probe_training import Dataset
 from pathlib import Path
+import json
 
 # Create dataset directory
 dataset_path = Path("datasets/my_dataset")
@@ -85,22 +88,19 @@ with open(dataset_path / "checksums.json", 'w') as f:
 
 ## Probe Naming Convention
 
-Probes are named: `{dataset}-{model_abbrev}-{method}`
+Probes are named: `{dataset}_{model}_{method}_layer{layer}`
 
 Examples:
-- `roleplaying-llama8b-linear-contrastive`
-- `truthfulqa-llama70b-massmean`
+- `roleplaying_Meta-Llama-3.1-8B-Instruct_ccs_layer22`
+- `roleplaying_Meta-Llama-3.1-8B-Instruct_massmean_layer12`
 
-Model abbreviations:
-- `llama8b`: meta-llama/Meta-Llama-3.1-8B-Instruct
-- `llama70b`: meta-llama/Llama-3.3-70B-Instruct
+The full model name is used in the probe name for clarity and to avoid ambiguity.
 
 ## Training Methods
 
-- **linear-contrastive**: Linear probe with contrastive loss
-- **massmean**: Difference of means (no gradient descent)
-- **lda**: Linear Discriminant Analysis
-- **lat**: Linear Artificial Tomography (Apollo research)
+- **ccs**: Contrast-Consistent Search (Burns et al.) - unsupervised method
+- **mean_difference**: Difference of means between positive and negative activations
+- **massmean**: Mass-mean direction (default method, fast and effective)
 
 ## Integrity Verification
 
@@ -118,11 +118,20 @@ Loading fails if checksums don't match, preventing use of corrupted data.
 - **Probe weights**: Stored on HuggingFace, cached in `probes/` (gitignored)
 - **Versioning**: Use git tags for probe versions (e.g., `probe/roleplaying-llama8b-linear-contrastive-v1`)
 
-## TODO
+## Status
 
-- [ ] Implement training methods (currently stubs)
-- [ ] Add Modal integration for GPU training
-- [ ] Implement HuggingFace upload/download
-- [ ] Add activation extraction from models
-- [ ] Create example datasets
-- [ ] Add comprehensive tests
+**Completed:**
+- ✅ Training methods (CCS, Mean Difference, Mass Mean)
+- ✅ Modal integration for distributed GPU training
+- ✅ HuggingFace Hub upload/download
+- ✅ Activation extraction from transformer layers
+- ✅ Probe registry with auto-registration
+- ✅ Dataset migration from external repos
+- ✅ Example dataset (roleplaying, 371 examples)
+- ✅ CLI tools (manage_probes.py)
+
+**TODO:**
+- [ ] Migrate additional datasets (sycophancy, persona, sandbagging)
+- [ ] Add comprehensive unit tests
+- [ ] Train probe suite across multiple models/layers
+- [ ] Add probe evaluation metrics
