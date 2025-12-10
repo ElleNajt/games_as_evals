@@ -10,9 +10,9 @@ import shutil
 from pathlib import Path
 from dataclasses import asdict
 
-from .config import TrainingConfig
-from .dataset import Dataset, ContrastivePair
-from .registry import ProbeRegistry, ProbeMetadata
+from src.probe_training.config import TrainingConfig
+from src.probe_training.dataset import Dataset, ContrastivePair
+from src.probe_training.registry import ProbeRegistry, ProbeMetadata
 
 
 class TestTrainingConfig:
