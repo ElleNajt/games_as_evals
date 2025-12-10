@@ -16,7 +16,6 @@ models
 
 data/
 value_head_probes/
-results/
 
 *.egg-info/
 **/*.egg-info/
