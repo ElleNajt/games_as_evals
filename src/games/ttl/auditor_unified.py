@@ -46,9 +46,18 @@ def make_guess(
     statements_text = "\n".join([f"{i + 1}. {s}" for i, s in enumerate(statements)])
 
     if probe_scores is not None:
+        # Validate all required scores are present
+        missing = [i for i in range(1, 4) if i not in probe_scores]
+        if missing:
+            raise ValueError(
+                f"Probe scores enabled but missing scores for statements: {missing}. "
+                f"This indicates a bug in probe score calculation. "
+                f"Available scores: {list(probe_scores.keys())}"
+            )
+
         # Include probe scores in the prompt
         probe_info = "\n".join([
-            f"Statement {i}: probe score = {probe_scores.get(i, 0.0):.4f}"
+            f"Statement {i}: probe score = {probe_scores[i]:.4f}"  # Direct access - will crash if missing
             for i in range(1, 4)
         ])
 

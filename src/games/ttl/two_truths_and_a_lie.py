@@ -249,18 +249,37 @@ def run_experiment(
         result["generated_tokens"], result["probe_probs"], result.get("token_entropies", [])
     )
 
+    # Validate all scores are present
+    for score_dict, score_name in [(avg_scores, "avg_scores"), (sum_scores, "sum_scores"), (max_scores, "max_scores")]:
+        missing = [i for i in range(1, 4) if i not in score_dict]
+        if missing:
+            raise ValueError(
+                f"{score_name} missing scores for statements: {missing}. "
+                f"This indicates a bug in probe score calculation. "
+                f"Available: {list(score_dict.keys())}"
+            )
+
+    for ent_dict, ent_name in [(avg_entropies, "avg_entropies"), (sum_entropies, "sum_entropies"), (max_entropies, "max_entropies")]:
+        missing = [i for i in range(1, 4) if i not in ent_dict]
+        if missing:
+            raise ValueError(
+                f"{ent_name} missing scores for statements: {missing}. "
+                f"This indicates a bug in entropy calculation. "
+                f"Available: {list(ent_dict.keys())}"
+            )
+
     print("\n📊 Probe scores (higher = more likely to be a lie):")
     for i in range(1, 4):
-        avg = avg_scores.get(i, 0.0)
-        total = sum_scores.get(i, 0.0)
-        maximum = max_scores.get(i, 0.0)
+        avg = avg_scores[i]  # Direct access - validated above
+        total = sum_scores[i]
+        maximum = max_scores[i]
         print(f"  Statement {i}: avg={avg:.4f}, sum={total:.4f}, max={maximum:.4f}")
 
     print("\n📊 Entropy scores (higher = more uncertainty):")
     for i in range(1, 4):
-        avg_ent = avg_entropies.get(i, 0.0)
-        sum_ent = sum_entropies.get(i, 0.0)
-        max_ent = max_entropies.get(i, 0.0)
+        avg_ent = avg_entropies[i]  # Direct access - validated above
+        sum_ent = sum_entropies[i]
+        max_ent = max_entropies[i]
         print(f"  Statement {i}: avg={avg_ent:.4f}, sum={sum_ent:.4f}, max={max_ent:.4f}")
 
     # Step 3: Probe's guesses (using different metrics)

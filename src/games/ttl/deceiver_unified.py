@@ -174,8 +174,14 @@ Make them similar in length and difficulty to distinguish. Focus on objective, v
 
                 # Calculate statement scores for each probe
                 if probe_token_scores_dict:
+                    # If we have probe token scores, we MUST have tokens
+                    if not result.tokens:
+                        raise ValueError(
+                            "Probe scores available but tokens are missing. "
+                            "This indicates a bug in the backend probe implementation."
+                        )
                     probe_scores = calculate_statement_scores(
-                        result.tokens or [],
+                        result.tokens,
                         probe_token_scores_dict,
                     )
 

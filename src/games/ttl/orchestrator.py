@@ -87,9 +87,20 @@ def run_game_round(
         print(f"  {i}. {stmt}")
     
     print(f"\n📊 Probe scores (avg):")
-    for i in range(1, 4):
-        score = deceiver_gen["avg_scores"].get(i, 0.0)
-        print(f"  Statement {i}: {score:.4f}")
+    avg_scores = deceiver_gen.get("avg_scores", {})
+    if avg_scores:
+        # Validate all scores present if avg_scores exists
+        missing = [i for i in range(1, 4) if i not in avg_scores]
+        if missing:
+            raise ValueError(
+                f"avg_scores present but missing scores for statements: {missing}. "
+                f"Available: {list(avg_scores.keys())}"
+            )
+        for i in range(1, 4):
+            score = avg_scores[i]  # Direct access - will crash if missing
+            print(f"  Statement {i}: {score:.4f}")
+    else:
+        print("  (no probe scores available)")
     
     # Step 2: Deceiver reveals the lie
     print(f"\n🤔 Asking deceiver to reveal the lie...")
