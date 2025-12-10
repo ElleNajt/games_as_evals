@@ -7,14 +7,16 @@ Manages the game flow, calls agents for decisions, and tracks state.
 import json
 import random
 import shutil
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
 from src.backends import create_backend
 from src.config import PlayerConfig
-from src.result_logging import ResultsLogger
 from src.player import GamePlayer
+from src.result_logging import ResultsLogger
+
 from .config import WerewolfConfig
 from .game_state import GamePhase, GameState, Player, Role
 
@@ -41,15 +43,15 @@ class GameCoordinator:
             game_id: Optional game ID (auto-generated if None)
         """
         self.config = config or WerewolfConfig()
-        
+
         # Create logger (handles directory structure and config saving)
         self.logger = ResultsLogger(
             config=self.config,
             game_name="werewolf",
             experiment_base=experiment_name,
-            game_id=game_id
+            game_id=game_id,
         )
-        
+
         # Get game ID from logger
         if game_id is None:
             self.game_id = self._get_next_game_id()
@@ -58,17 +60,17 @@ class GameCoordinator:
                 config=self.config,
                 game_name="werewolf",
                 experiment_base=experiment_name,
-                game_id=self.game_id
+                game_id=self.game_id,
             )
         else:
             self.game_id = game_id
-        
+
         self.output_dir = self.logger.results_dir
-        
+
         # Create GamePlayer instances for each player based on config
         self.players: Dict[str, GamePlayer] = {}
         player_configs_by_role: Dict[Role, PlayerConfig] = {}
-        
+
         # Map player configs to roles
         for player_config in self.config.players:
             if "Werewolf" in player_config.name:
@@ -77,13 +79,13 @@ class GameCoordinator:
                 role = Role.SEER
             else:
                 role = Role.VILLAGER
-            
+
             if role not in player_configs_by_role:
                 player_configs_by_role[role] = player_config
-        
+
         # Initialize players dynamically based on config
         player_names = [f"Player{i + 1}" for i in range(self.config.num_players)]
-        
+
         # Build role list: werewolves, optional seer, remaining villagers
         if self.config.no_seer:
             num_villagers = self.config.num_players - self.config.num_werewolves
@@ -100,7 +102,7 @@ class GameCoordinator:
                 + [Role.VILLAGER] * num_villagers
             )
         random.shuffle(roles)
-        
+
         # Create GamePlayer instances
         for name, role in zip(player_names, roles):
             player_config = player_configs_by_role.get(role)
@@ -109,15 +111,15 @@ class GameCoordinator:
                 backend = create_backend(
                     backend_type=player_config.backend_type,
                     model=player_config.model,
-                    probes=player_config.probes
+                    probes=player_config.probes,
                 )
-                
+
                 # Create GamePlayer with logger
                 self.players[name] = GamePlayer(
                     name=name,
                     backend=backend,
                     system_prompt=player_config.system_prompt,
-                    logger=self.logger
+                    logger=self.logger,
                 )
 
         self.game = GameState(player_names, roles)
@@ -144,16 +146,16 @@ class GameCoordinator:
         self.cumulative_scores: Dict[str, float] = {name: 0.0 for name in player_names}
 
         self.log(f"=== WEREWOLF GAME {self.game_id} STARTED ===")
-        
+
         # Log backend info (show unique backends used)
         backend_types = set(pc.backend_type for pc in self.config.players)
         self.log(f"Backends: {', '.join(backend_types)}")
-        
+
         # Check if any player has probe enabled
-        has_probe = any(pc.probe is not None for pc in self.config.players)
+        has_probe = any(pc.probes is not None for pc in self.config.players)
         if has_probe and self.config.provide_probe_scores:
             self.log("Lie detector: ENABLED")
-            
+
         self.log(f"Players: {player_names}")
         self.log("\nRole assignments (secret):")
         for player in self.game.players:
@@ -168,10 +170,10 @@ class GameCoordinator:
         # The logger creates: results/werewolf/{experiment_name}/
         # We need to look for game0, game1, etc. subdirectories
         experiment_dir = self.logger.results_dir.parent
-        
+
         if not experiment_dir.exists():
             return 0
-            
+
         existing_games = [
             d
             for d in experiment_dir.iterdir()
@@ -202,10 +204,9 @@ class GameCoordinator:
         """
         # Check if any player has probe scores available
         has_probe = any(
-            player_config.probe is not None 
-            for player_config in self.config.players
+            player_config.probes is not None for player_config in self.config.players
         )
-        
+
         if not has_probe:
             return
 
@@ -230,9 +231,7 @@ Output format: {{"action": "I understand, I am a {player.role.value}"}}"""
 
                 # Call player to get probe scores
                 result = game_player.query(
-                    prompt=prompt,
-                    max_tokens=50,
-                    temperature=0.7
+                    prompt=prompt, max_tokens=50, temperature=0.7
                 )
 
                 # Store probe scores if available
@@ -242,7 +241,7 @@ Output format: {{"action": "I understand, I am a {player.role.value}"}}"""
                         "token_scores": result.probe_scores.token_scores,
                         "phase_scores": result.probe_scores.phase_scores,
                     }
-                    
+
                     score = result.probe_scores.aggregate_score
                     self.log(f"  {player.name} ({player.role.value}): {score:.3f}")
                 else:
@@ -328,23 +327,25 @@ Output format: {{"action": "I understand, I am a {player.role.value}"}}"""
             try:
                 # Call GamePlayer (automatically logs via ResultsLogger)
                 result = game_player.query(
-                    prompt=prompt,
-                    max_tokens=512,
-                    temperature=0.7
+                    prompt=prompt, max_tokens=512, temperature=0.7
                 )
-                
+
                 response = result.text
 
                 # Log response to LLM log
                 self.log_llm(f"\n--- LLM RESPONSE ---")
                 self.log_llm(response)
-                
+
                 # Log probe scores if available
                 if result.probe_scores:
                     self.log_llm(f"\n--- PROBE SCORES ---")
-                    self.log_llm(f"Aggregate: {result.probe_scores.aggregate_score:.2f}")
+                    self.log_llm(
+                        f"Aggregate: {result.probe_scores.aggregate_score:.2f}"
+                    )
                     if result.probe_scores.token_scores:
-                        self.log_llm(f"Token scores: {result.probe_scores.token_scores[:5]}...")
+                        self.log_llm(
+                            f"Token scores: {result.probe_scores.token_scores[:5]}..."
+                        )
 
                 if expect_json:
                     # Parse JSON response
@@ -362,7 +363,9 @@ Output format: {{"action": "I understand, I am a {player.role.value}"}}"""
                             self.player_activations[player_name].append(
                                 {
                                     "action": action,
-                                    "reasoning": reasoning if self.config.request_reasoning else None,
+                                    "reasoning": reasoning
+                                    if self.config.request_reasoning
+                                    else None,
                                     "activations": {
                                         "aggregate_score": result.probe_scores.aggregate_score,
                                         "token_scores": result.probe_scores.token_scores,
@@ -372,7 +375,9 @@ Output format: {{"action": "I understand, I am a {player.role.value}"}}"""
                             )
 
                             # Update cumulative score
-                            self.cumulative_scores[player_name] += result.probe_scores.aggregate_score
+                            self.cumulative_scores[player_name] += (
+                                result.probe_scores.aggregate_score
+                            )
 
                         if self.config.request_reasoning:
                             visibility = (
@@ -582,13 +587,12 @@ Output format: {{"action": "I understand, I am a {player.role.value}"}}"""
         """
         if not self.config.provide_probe_scores:
             return ""
-        
+
         # Check if any player has a probe configured
         has_probe = any(
-            player_config.probe is not None 
-            for player_config in self.config.players
+            player_config.probes is not None for player_config in self.config.players
         )
-        
+
         if not has_probe:
             return ""
 
@@ -672,10 +676,10 @@ Output format: {self.get_output_format("strategy", "name", player_name=ww.name)}
             self.log(f"\nWerewolf votes: {ww_votes}")
 
             # Count votes and determine victim
-            vote_counts = {}
-            for voter, target in ww_votes.items():
-                if target in other_players:
-                    vote_counts[target] = vote_counts.get(target, 0) + 1
+            valid_votes = [
+                target for target in ww_votes.values() if target in other_players
+            ]
+            vote_counts = Counter(valid_votes)
 
             if vote_counts:
                 # If there's a tie or disagreement, choose randomly from voted targets
@@ -1004,9 +1008,7 @@ Output format: {self.get_output_format("vote analysis", "name")}"""
             self.log(f"{player.name} votes for: {vote}")
 
         # Count votes
-        vote_counts = {}
-        for voter, target in votes.items():
-            vote_counts[target] = vote_counts.get(target, 0) + 1
+        vote_counts = Counter(votes.values())
 
         # Find player with most votes
         if vote_counts:
@@ -1061,8 +1063,8 @@ Output format: {self.get_output_format("vote analysis", "name")}"""
         """Save game statistics and history."""
         # Get unique backend types from player configs
         backend_types = list(set(pc.backend_type for pc in self.config.players))
-        has_probe = any(pc.probe is not None for pc in self.config.players)
-        
+        has_probe = any(pc.probes is not None for pc in self.config.players)
+
         stats = {
             "game_id": self.game_id,
             "backend_types": backend_types,
@@ -1100,16 +1102,15 @@ Output format: {self.get_output_format("vote analysis", "name")}"""
 
         self.log(f"\nGame stats saved to {stats_file}")
 
-        # Generate visualizations and HTML report
-        try:
-            from visualization.game_visualizer import GameVisualizer
+        # Generate HTML visualization with probe scores
+        viz_file = self.logger.generate_consolidated_visualization()
+        if viz_file:
+            self.log(f"HTML visualization generated: {viz_file}")
 
-            self.log("\nGenerating visualizations and HTML report...")
-            visualizer = GameVisualizer(self.output_dir)
-            visualizer.generate_all()
-            self.log(f"Report available at: {self.output_dir}/game_report.html")
-        except Exception as e:
-            self.log(f"Warning: Failed to generate visualizations: {e}")
+        # Generate readable markdown format
+        markdown_path = self.logger.generate_readable_messages()
+        if markdown_path:
+            self.log(f"Readable messages generated: {markdown_path}")
 
     def run_game(self, max_turns: Optional[int] = None):
         """Run the complete game until a side wins."""

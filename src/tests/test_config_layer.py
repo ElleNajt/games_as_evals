@@ -15,6 +15,8 @@ sys.path.insert(0, '/workspace')
 
 from src.config.player_config import PlayerConfig
 from src.config.experiment_config import ExperimentConfig
+from src.experiments.werewolf.configs import create_werewolf_config
+from src.experiments.ttl.configs import create_ttl_config
 from src.games.ttl.config import TTLPlayerConfig, TTLConfig
 
 
