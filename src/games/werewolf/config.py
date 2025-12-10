@@ -45,25 +45,25 @@ class WerewolfConfig(GameConfig):
         name="Villager",
         backend_type="claude",
         model="claude-3-5-sonnet-20241022",
-        probe=None,
+        probes=None,
         temperature=0.7,
         system_prompt="You are a villager in Werewolf."
     ))
-    
+
     werewolf_config: PlayerConfig = field(default_factory=lambda: PlayerConfig(
         name="Werewolf",
         backend_type="claude",
         model="claude-3-5-sonnet-20241022",
-        probe=None,
+        probes=None,
         temperature=0.7,
         system_prompt="You are a werewolf in Werewolf."
     ))
-    
+
     seer_config: Optional[PlayerConfig] = field(default_factory=lambda: PlayerConfig(
         name="Seer",
         backend_type="claude",
         model="claude-3-5-sonnet-20241022",
-        probe=None,
+        probes=None,
         temperature=0.7,
         system_prompt="You are the seer in Werewolf."
     ))
@@ -127,29 +127,31 @@ class WerewolfConfig(GameConfig):
             probe = None
         
         # Build player configs
+        probes = [probe] if probe else None
+
         villager_config = PlayerConfig(
             name="Villager",
             backend_type=backend_type if backend_type != "modal_probe" else "modal",
             model=model,
-            probe=probe,
+            probes=probes,
             temperature=0.7,
             system_prompt="You are a villager in Werewolf."
         )
-        
+
         werewolf_config = PlayerConfig(
             name="Werewolf",
             backend_type=backend_type if backend_type != "modal_probe" else "modal",
             model=model,
-            probe=probe,
+            probes=probes,
             temperature=0.7,
             system_prompt="You are a werewolf in Werewolf."
         )
-        
+
         seer_config = PlayerConfig(
             name="Seer",
             backend_type=backend_type if backend_type != "modal_probe" else "modal",
             model=model,
-            probe=probe,
+            probes=probes,
             temperature=0.7,
             system_prompt="You are the seer in Werewolf."
         )
