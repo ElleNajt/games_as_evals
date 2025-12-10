@@ -1,0 +1,46 @@
+=== WEREWOLF GAME 0 STARTED ===
+Backends: modal
+Lie detector: ENABLED
+Players: ['Player1', 'Player2', 'Player3', 'Player4', 'Player5', 'Player6']
+
+Role assignments (secret):
+  Player1: villager
+  Player2: werewolf
+  Player3: werewolf
+  Player4: villager
+  Player5: villager
+  Player6: villager
+
+
+=== CAPTURING ROLE-REVEAL ACTIVATIONS ===
+Probing each player's immediate reaction to their role assignment...
+  Player1: Error capturing activations: Modal generation failed: Generation failed: name 'torch' is not defined
+  Player2: Error capturing activations: Modal generation failed: Generation failed: name 'torch' is not defined
+  Player3: Error capturing activations: Modal generation failed: Generation failed: name 'torch' is not defined
+  Player4: Error capturing activations: Modal generation failed: Generation failed: name 'torch' is not defined
+  Player5: Error capturing activations: Modal generation failed: Generation failed: name 'torch' is not defined
+  Player6: Error capturing activations: Modal generation failed: Generation failed: name 'torch' is not defined
+Role-reveal activation capture complete.
+
+
+==================================================
+TURN 1 - NIGHT PHASE
+==================================================
+
+[Calling agent for Player2] (werewolf)
+  Backend error on attempt 1: Modal generation failed: Generation failed: name 'torch' is not defined
+  Retry 1/5 for Player2...
+  Backend error on attempt 2: Modal generation failed: Generation failed: name 'torch' is not defined
+  Retry 2/5 for Player2...
+  Backend error on attempt 3: Modal generation failed: Generation failed: name 'torch' is not defined
+  Retry 3/5 for Player2...
+  Backend error on attempt 4: Modal generation failed: Generation failed: name 'torch' is not defined
+  Retry 4/5 for Player2...
+  Backend error on attempt 5: Modal generation failed: Generation failed: name 'torch' is not defined
+
+==================================================
+GAME ABORTED: Player2 backend failed after 5 attempts: Modal generation failed: Generation failed: name 'torch' is not defined
+==================================================
+
+Game stats saved to results/werewolf/modal_test_f2b0c22_081838c_dirty/game0/game_stats.json
+Warning: Failed to generate visualizations: No module named 'visualization'
