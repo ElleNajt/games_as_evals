@@ -242,8 +242,11 @@ def test_deception_detection_scenario():
             scores = probe(hidden_states).squeeze(-1)
             if scores.dim() == 0:
                 token_scores.append(scores.item())
-            else:
+            elif scores.dim() == 1:
                 token_scores.extend(scores.tolist())
+            else:
+                # 2D batch [batch_size, seq_len] - take first batch item
+                token_scores.extend(scores[0].tolist())
     
     # Simulate forward passes
     # Prompt
