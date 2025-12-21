@@ -236,27 +236,17 @@ class UnifiedProbeService:
             # token_scores now contains scores for ALL tokens (prompt + generation)
             total_tokens = prompt_num_tokens + len(generated_ids)
 
-            # Validate we got the expected number of scores (allow 1-2 token tolerance for special tokens)
-            tolerance = 2
-            if abs(len(token_scores) - total_tokens) > tolerance:
+            # Validate we got the expected number of scores - NO TOLERANCE
+            if len(token_scores) != total_tokens:
                 raise ValueError(
-                    f"Probe hook captured {len(token_scores)} scores but expected {total_tokens} "
-                    f"({prompt_num_tokens} prompt + {len(generated_ids)} generated). "
-                    f"Difference of {abs(len(token_scores) - total_tokens)} exceeds tolerance of {tolerance}. "
-                    f"This indicates the hook didn't fire for all tokens."
+                    f"Probe hook captured {len(token_scores)} scores but expected {total_tokens}. "
+                    f"prompt_token_ids: {len(prompt_token_ids)}, generated_ids: {len(generated_ids)}. "
+                    f"This is a bug - investigate why the hook didn't fire for all tokens."
                 )
 
             # Split into prompt and generation scores
-            # If we have fewer scores than expected (due to special tokens), adjust split
-            actual_num_scores = len(token_scores)
-            if actual_num_scores < total_tokens:
-                # Missing tokens likely at the end (EOS), keep prompt split the same
-                prompt_token_scores = token_scores[:min(prompt_num_tokens, actual_num_scores)]
-                generation_token_scores = token_scores[min(prompt_num_tokens, actual_num_scores):]
-            else:
-                # Normal case or extra scores
-                prompt_token_scores = token_scores[:prompt_num_tokens]
-                generation_token_scores = token_scores[prompt_num_tokens:total_tokens]
+            prompt_token_scores = token_scores[:prompt_num_tokens]
+            generation_token_scores = token_scores[prompt_num_tokens:]
 
             # Decode ALL tokens (prompt + generation)
             prompt_tokens = self.tokenizer.convert_ids_to_tokens(prompt_token_ids)
@@ -434,27 +424,17 @@ class UnifiedProbeService:
             for probe_name in probe_paths:
                 token_scores = probe_token_scores[probe_name]
 
-                # Validate we got the expected number of scores (allow 1-2 token tolerance for special tokens)
-                tolerance = 2
-                if abs(len(token_scores) - total_tokens) > tolerance:
+                # Validate we got the expected number of scores - NO TOLERANCE
+                if len(token_scores) != total_tokens:
                     raise ValueError(
-                        f"Probe '{probe_name}' hook captured {len(token_scores)} scores but expected {total_tokens} "
-                        f"({prompt_num_tokens} prompt + {len(generated_ids)} generated). "
-                        f"Difference of {abs(len(token_scores) - total_tokens)} exceeds tolerance of {tolerance}. "
-                        f"This indicates the hook didn't fire for all tokens."
+                        f"Probe '{probe_name}' hook captured {len(token_scores)} scores but expected {total_tokens}. "
+                        f"prompt_token_ids: {len(prompt_token_ids)}, generated_ids: {len(generated_ids)}. "
+                        f"This is a bug - investigate why the hook didn't fire for all tokens."
                     )
 
                 # Split into prompt and generation scores
-                # If we have fewer scores than expected (due to special tokens), adjust split
-                actual_num_scores = len(token_scores)
-                if actual_num_scores < total_tokens:
-                    # Missing tokens likely at the end (EOS), keep prompt split the same
-                    probe_prompt_scores[probe_name] = token_scores[:min(prompt_num_tokens, actual_num_scores)]
-                    probe_generation_scores[probe_name] = token_scores[min(prompt_num_tokens, actual_num_scores):]
-                else:
-                    # Normal case or extra scores
-                    probe_prompt_scores[probe_name] = token_scores[:prompt_num_tokens]
-                    probe_generation_scores[probe_name] = token_scores[prompt_num_tokens:total_tokens]
+                probe_prompt_scores[probe_name] = token_scores[:prompt_num_tokens]
+                probe_generation_scores[probe_name] = token_scores[prompt_num_tokens:]
 
             # Decode ALL tokens (prompt + generation)
             prompt_tokens = self.tokenizer.convert_ids_to_tokens(prompt_token_ids)
