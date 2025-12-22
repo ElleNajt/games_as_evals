@@ -19,8 +19,8 @@ These tests use mocks and run in <1 second. Use these for TDD and quick validati
 
 **Prerequisites:**
 - Modal authenticated: `modal setup`
-- 8B service deployed: `modal deploy src/modal_deployments/unified_probe_service.py`
-- (Optional) 70B service deployed: `modal deploy src/modal_deployments/unified_probe_service_70b.py`
+- 8B service deployed: `modal deploy src/modal_deployments/unified_probe_service.py::app_8b`
+- (Optional) 70B service deployed: `modal deploy src/modal_deployments/unified_probe_service.py::app_70b`
 
 **With pytest (if installed):**
 

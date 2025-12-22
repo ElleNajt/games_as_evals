@@ -1,8 +1,8 @@
 """
-Shared code for Modal probe services (8B and 70B).
+Shared code for Modal probe services.
 
-This module contains common functionality used by both unified_probe_service.py
-and unified_probe_service_70b.py to reduce code duplication.
+This module contains common functionality used by unified_probe_service.py
+(which creates both 8B and 70B services) to reduce code duplication.
 """
 
 import json
