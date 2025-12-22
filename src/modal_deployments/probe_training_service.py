@@ -9,11 +9,12 @@ This service allows training probes on Modal's GPU infrastructure with:
 All training code is self-contained to avoid dependency issues.
 """
 
-import modal
-from pathlib import Path
 import json
-from typing import Dict, Any, Optional, List, Tuple
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+import modal
 
 # Configuration
 GPU_CONFIG_8B = "A10G"  # For 8B models
@@ -28,19 +29,16 @@ VOLUME_PATH = "/volume"
 HF_SECRET = modal.Secret.from_name("huggingface-secret")
 
 # Modal image with all dependencies
-image = (
-    modal.Image.debian_slim(python_version="3.11")
-    .pip_install(
-        "torch>=2.0.0",
-        "transformers>=4.40.0",
-        "accelerate>=0.20.0",
-        "numpy>=1.24.0",
-        "huggingface_hub>=0.20.0",
-        "scikit-learn>=1.3.0",
-        "jaxtyping>=0.2.0",
-        "einops>=0.7.0",
-        "pyyaml>=6.0",
-    )
+image = modal.Image.debian_slim(python_version="3.11").pip_install(
+    "torch>=2.0.0",
+    "transformers>=4.40.0",
+    "accelerate>=0.20.0",
+    "numpy>=1.24.0",
+    "huggingface_hub>=0.20.0",
+    "scikit-learn>=1.3.0",
+    "jaxtyping>=0.2.0",
+    "einops>=0.7.0",
+    "pyyaml>=6.0",
 )
 
 app = modal.App("probe-training-service", image=image)
@@ -77,13 +75,14 @@ def train_probe_on_modal(
     Returns:
         Dictionary with probe_name, metrics, and volume path
     """
+    from dataclasses import dataclass
+    from typing import List, Tuple
+
+    import einops
     import torch
     import torch.nn as nn
     import torch.optim as optim
     from transformers import AutoModelForCausalLM, AutoTokenizer
-    from typing import List, Tuple
-    from dataclasses import dataclass
-    import einops
 
     # --- Inline Data Structures ---
 
@@ -127,13 +126,13 @@ def train_probe_on_modal(
         layer: int,
         batch_size: int = 8,
         device: str = "cuda",
-        verbose: bool = True
+        verbose: bool = True,
     ):
         """Extract activations from a list of texts."""
         all_activations = []
 
         for i in range(0, len(texts), batch_size):
-            batch_texts = texts[i:i + batch_size]
+            batch_texts = texts[i : i + batch_size]
 
             # Tokenize
             inputs = tokenizer(
@@ -141,13 +140,15 @@ def train_probe_on_modal(
                 return_tensors="pt",
                 padding=True,
                 truncation=True,
-                max_length=512
+                max_length=512,
             ).to(device)
 
             # Extract activations
             with torch.no_grad():
                 outputs = model(**inputs, output_hidden_states=True)
-                hidden_states = outputs.hidden_states[layer]  # [batch, seq_len, hidden_dim]
+                hidden_states = outputs.hidden_states[
+                    layer
+                ]  # [batch, seq_len, hidden_dim]
 
                 # Take last token activation for each example
                 last_token_acts = hidden_states[:, -1, :]  # [batch, hidden_dim]
@@ -162,28 +163,29 @@ def train_probe_on_modal(
         layer: int,
         batch_size: int = 8,
         device: str = "cuda",
-        verbose: bool = True
+        verbose: bool = True,
     ):
         """Extract activations for positive and negative examples."""
         positive_texts = [pair.positive for pair in dataset_pairs]
         negative_texts = [pair.negative for pair in dataset_pairs]
 
         if verbose:
-            print(f"  Extracting activations for {len(positive_texts)} positive examples...")
+            print(
+                f"  Extracting activations for {len(positive_texts)} positive examples..."
+            )
         pos_acts = extract_activations_from_text(
             model, tokenizer, positive_texts, layer, batch_size, device, verbose=False
         )
 
         if verbose:
-            print(f"  Extracting activations for {len(negative_texts)} negative examples...")
+            print(
+                f"  Extracting activations for {len(negative_texts)} negative examples..."
+            )
         neg_acts = extract_activations_from_text(
             model, tokenizer, negative_texts, layer, batch_size, device, verbose=False
         )
 
-        return ActivationData(
-            positive_acts=pos_acts,
-            negative_acts=neg_acts
-        )
+        return ActivationData(positive_acts=pos_acts, negative_acts=neg_acts)
 
     # --- Inline Training Methods ---
 
@@ -218,7 +220,9 @@ def train_probe_on_modal(
 
         return direction, metrics
 
-    def train_linear_contrastive(activation_data: ActivationData, learning_rate: float, num_epochs: int):
+    def train_linear_contrastive(
+        activation_data: ActivationData, learning_rate: float, num_epochs: int
+    ):
         """Train linear probe with contrastive loss."""
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         pos_acts = activation_data.positive_acts.to(device).to(torch.float32)
@@ -227,10 +231,12 @@ def train_probe_on_modal(
         hidden_dim = pos_acts.shape[1]
 
         # Initialize probe direction
-        direction = nn.Parameter(torch.randn(hidden_dim, device=device, dtype=torch.float32))
+        direction = nn.Parameter(
+            torch.randn(hidden_dim, device=device, dtype=torch.float32)
+        )
         optimizer = optim.Adam([direction], lr=learning_rate)
 
-        best_loss = float('inf')
+        best_loss = float("inf")
         best_direction = None
 
         for epoch in range(num_epochs):
@@ -387,35 +393,74 @@ def train_probe_on_modal(
             f"Please upload dataset to volume first."
         )
 
-    # Load dataset
+    # Load training dataset
     train_file = dataset_path / "train.jsonl"
     train_data = []
-    with open(train_file, 'r') as f:
+    with open(train_file, "r") as f:
         for line in f:
             data = json.loads(line)
-            train_data.append(ContrastivePair(
-                positive=data["positive"],
-                negative=data["negative"],
-                metadata=data.get("metadata")
-            ))
+            train_data.append(
+                ContrastivePair(
+                    positive=data["positive"],
+                    negative=data["negative"],
+                    metadata=data.get("metadata"),
+                )
+            )
+
+    # Load validation dataset
+    val_file = dataset_path / "val.jsonl"
+    val_data = []
+    if val_file.exists():
+        with open(val_file, "r") as f:
+            for line in f:
+                data = json.loads(line)
+                val_data.append(
+                    ContrastivePair(
+                        positive=data["positive"],
+                        negative=data["negative"],
+                        metadata=data.get("metadata"),
+                    )
+                )
 
     print(f"  ✓ Loaded {len(train_data)} training examples")
+    if val_data:
+        print(f"  ✓ Loaded {len(val_data)} validation examples")
     print()
 
     # Step 2: Load model and extract activations
     print(f"Step 2/4: Loading model and extracting activations...")
     model, tokenizer = load_model_and_tokenizer(model_name, device="cuda")
 
-    activation_data = extract_contrastive_activations(
+    print("  Extracting training activations...")
+    train_activation_data = extract_contrastive_activations(
         model=model,
         tokenizer=tokenizer,
         dataset_pairs=train_data,
         layer=layer,
         batch_size=batch_size,
         device="cuda",
-        verbose=True
+        verbose=True,
     )
-    print(f"  ✓ Extracted activations: {activation_data.positive_acts.shape}")
+    print(
+        f"  ✓ Extracted training activations: {train_activation_data.positive_acts.shape}"
+    )
+
+    # Extract validation activations if validation data exists
+    val_activation_data = None
+    if val_data:
+        print("  Extracting validation activations...")
+        val_activation_data = extract_contrastive_activations(
+            model=model,
+            tokenizer=tokenizer,
+            dataset_pairs=val_data,
+            layer=layer,
+            batch_size=batch_size,
+            device="cuda",
+            verbose=False,
+        )
+        print(
+            f"  ✓ Extracted validation activations: {val_activation_data.positive_acts.shape}"
+        )
     print()
 
     # Free memory
@@ -426,20 +471,44 @@ def train_probe_on_modal(
     print(f"Step 3/4: Training probe with {method}...")
 
     if method == "massmean":
-        probe_weights, metrics = train_massmean(activation_data)
+        probe_weights, train_metrics = train_massmean(train_activation_data)
     elif method == "linear-contrastive":
-        probe_weights, metrics = train_linear_contrastive(activation_data, learning_rate, num_epochs)
+        probe_weights, train_metrics = train_linear_contrastive(
+            train_activation_data, learning_rate, num_epochs
+        )
     elif method == "lda":
-        probe_weights, metrics = train_lda(activation_data)
+        probe_weights, train_metrics = train_lda(train_activation_data)
     elif method == "lat":
-        probe_weights, metrics = train_lat(activation_data, seed)
+        probe_weights, train_metrics = train_lat(train_activation_data, seed)
     else:
         raise ValueError(f"Unknown method: {method}")
 
     print(f"  ✓ Training complete!")
-    print(f"  Metrics:")
-    for key, value in metrics.items():
+    print(f"  Train Metrics:")
+    for key, value in train_metrics.items():
         print(f"    - {key}: {value:.4f}")
+
+    # Evaluate on validation set if available
+    val_metrics = None
+    if val_activation_data is not None:
+        print(f"  Evaluating on validation set...")
+        with torch.no_grad():
+            pos_scores = val_activation_data.positive_acts @ probe_weights
+            neg_scores = val_activation_data.negative_acts @ probe_weights
+
+            correct = (pos_scores > 0).sum() + (neg_scores < 0).sum()
+            total = len(pos_scores) + len(neg_scores)
+            accuracy = (correct.float() / total).item()
+
+        val_metrics = {
+            "accuracy": accuracy,
+            "mean_pos_score": pos_scores.mean().item(),
+            "mean_neg_score": neg_scores.mean().item(),
+            "separation": (pos_scores.mean() - neg_scores.mean()).item(),
+        }
+        print(f"  Val Metrics:")
+        for key, value in val_metrics.items():
+            print(f"    - {key}: {value:.4f}")
     print()
 
     # Step 4: Save probe to volume
@@ -457,11 +526,12 @@ def train_probe_on_modal(
         "model": model_name,
         "method": method,
         "layer": layer,
-        "metrics": metrics,
+        "train_metrics": train_metrics,
+        "val_metrics": val_metrics,
         "probe_name": probe_name,
     }
 
-    with open(probe_dir / "config.json", 'w') as f:
+    with open(probe_dir / "config.json", "w") as f:
         json.dump(config_data, f, indent=2)
 
     # Commit volume changes
@@ -475,9 +545,10 @@ def train_probe_on_modal(
 
     return {
         "probe_name": probe_name,
-        "metrics": metrics,
+        "train_metrics": train_metrics,
+        "val_metrics": val_metrics,
         "volume_path": str(probe_dir),
-        "success": True
+        "success": True,
     }
 
 
@@ -503,7 +574,7 @@ def download_probe_from_volume(probe_name: str, modal_path: str, local_path: str
         raise FileNotFoundError(f"Probe not found on volume: {volume_probe_path}")
 
     # Read the probe file
-    with open(volume_probe_path, 'rb') as f:
+    with open(volume_probe_path, "rb") as f:
         probe_data = f.read()
 
     print(f"  ✓ Read probe from volume: {len(probe_data)} bytes")
@@ -533,7 +604,7 @@ def upload_dataset_files(dataset_name: str, files_data: Dict[str, str]):
     # Write each file
     for filename, content in files_data.items():
         file_path = volume_dataset_path / filename
-        with open(file_path, 'w') as f:
+        with open(file_path, "w") as f:
             f.write(content)
         print(f"  ✓ Uploaded: {filename}")
 
@@ -575,14 +646,11 @@ def main(
         for file_path in dataset_path.iterdir():
             if file_path.is_file():
                 print(f"  Reading {file_path.name}...")
-                with open(file_path, 'r') as f:
+                with open(file_path, "r") as f:
                     files_data[file_path.name] = f.read()
 
         print(f"  Uploading {len(files_data)} files...")
-        upload_dataset_files.remote(
-            dataset_name=dataset,
-            files_data=files_data
-        )
+        upload_dataset_files.remote(dataset_name=dataset, files_data=files_data)
         print("✓ Dataset upload complete!")
 
     elif action == "train":
@@ -600,7 +668,9 @@ def main(
         print()
         print("Training completed successfully!")
         print(f"Probe name: {result['probe_name']}")
-        print(f"Metrics: {result['metrics']}")
+        print(f"Train Metrics: {result['train_metrics']}")
+        if result["val_metrics"]:
+            print(f"Val Metrics: {result['val_metrics']}")
         print(f"Volume path: {result['volume_path']}")
 
     else:
