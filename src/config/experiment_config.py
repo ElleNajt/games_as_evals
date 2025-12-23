@@ -131,6 +131,12 @@ def get_experiment_config(preset: str) -> ExperimentConfig:
             top_k_logits=10,
             description="8B model with massmean deception probe (78% val acc) and hallucination probe",
         ),
+        "8b_deception_massmean": ExperimentConfig(
+            model="meta-llama/Meta-Llama-3.1-8B-Instruct",
+            probes=["deception_8b_massmean"],
+            top_k_logits=10,
+            description="8B model with massmean deception probe only (78% val acc)",
+        ),
         "70b_both": ExperimentConfig(
             model="meta-llama/Llama-3.3-70B-Instruct",
             probes=["deception_70b", "hallucination_70b"],
