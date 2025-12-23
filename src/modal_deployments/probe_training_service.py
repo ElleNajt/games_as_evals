@@ -521,8 +521,20 @@ def train_probe_on_modal(
     probe_path = probe_dir / "probe_head.bin"
     torch.save(probe_weights, probe_path)
 
-    # Save config and metrics with correct filename
-    config_data = {
+    # Save config in the format expected by inference service
+    probe_config_data = {
+        "hidden_size": 4096,  # Meta-Llama-3.1-8B hidden size
+        "layer_idx": layer,
+        "probe_type": f"{method}_probe",
+        "source_model": model_name,
+        "source_dataset": dataset_name,
+    }
+
+    with open(probe_dir / "probe_config.json", "w") as f:
+        json.dump(probe_config_data, f, indent=2)
+
+    # Also save training metadata separately
+    training_metadata = {
         "dataset": dataset_name,
         "model": model_name,
         "method": method,
@@ -532,8 +544,8 @@ def train_probe_on_modal(
         "probe_name": probe_name,
     }
 
-    with open(probe_dir / "probe_config.json", "w") as f:
-        json.dump(config_data, f, indent=2)
+    with open(probe_dir / "training_metadata.json", "w") as f:
+        json.dump(training_metadata, f, indent=2)
 
     # Commit volume changes
     VOLUME.commit()
