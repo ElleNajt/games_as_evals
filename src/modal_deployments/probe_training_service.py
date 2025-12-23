@@ -517,10 +517,11 @@ def train_probe_on_modal(
     probe_dir = Path(VOLUME_PATH) / "models" / "probes" / probe_name
     probe_dir.mkdir(parents=True, exist_ok=True)
 
-    probe_path = probe_dir / "probe.pt"
+    # Save probe weights with correct filename for inference service
+    probe_path = probe_dir / "probe_head.bin"
     torch.save(probe_weights, probe_path)
 
-    # Save config and metrics
+    # Save config and metrics with correct filename
     config_data = {
         "dataset": dataset_name,
         "model": model_name,
@@ -531,7 +532,7 @@ def train_probe_on_modal(
         "probe_name": probe_name,
     }
 
-    with open(probe_dir / "config.json", "w") as f:
+    with open(probe_dir / "probe_config.json", "w") as f:
         json.dump(config_data, f, indent=2)
 
     # Commit volume changes
@@ -567,8 +568,8 @@ def download_probe_from_volume(probe_name: str, modal_path: str, local_path: str
 
     print(f"Downloading probe '{probe_name}' from Modal volume...")
 
-    # Read probe file from volume
-    volume_probe_path = Path(modal_path) / "probe.pt"
+    # Read probe file from volume (correct filename)
+    volume_probe_path = Path(modal_path) / "probe_head.bin"
 
     if not volume_probe_path.exists():
         raise FileNotFoundError(f"Probe not found on volume: {volume_probe_path}")
