@@ -517,9 +517,16 @@ def train_probe_on_modal(
     probe_dir = Path(VOLUME_PATH) / "models" / "probes" / probe_name
     probe_dir.mkdir(parents=True, exist_ok=True)
 
-    # Save probe weights with correct filename for inference service
+    # Save probe weights with correct filename and format for inference service
+    # Inference expects state_dict format: {'weight': tensor, 'bias': tensor}
+    probe_state_dict = {
+        "weight": probe_weights.unsqueeze(
+            0
+        ),  # Add batch dimension: [hidden_size] -> [1, hidden_size]
+        "bias": torch.zeros(1),  # Massmean probe has no bias
+    }
     probe_path = probe_dir / "probe_head.bin"
-    torch.save(probe_weights, probe_path)
+    torch.save(probe_state_dict, probe_path)
 
     # Save config in the format expected by inference service
     probe_config_data = {
