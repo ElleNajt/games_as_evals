@@ -1,0 +1,6 @@
+# Ignore all files in probe cache
+*
+
+# Except this gitignore and README
+!.gitignore
+!README.md

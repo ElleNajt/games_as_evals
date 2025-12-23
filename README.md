@@ -50,15 +50,15 @@ export OPENROUTER_API_KEY="your-key-here"
 modal setup
 
 # Deploy the unified probe service (8B)
-modal deploy src/modal_deployments/unified_probe_service.py
+modal deploy src/modal_deployments/unified_probe_service.py::app_8b
 
 # (Optional) Deploy 70B service if you need 70B probes
-modal deploy src/modal_deployments/unified_probe_service_70b.py
+modal deploy src/modal_deployments/unified_probe_service.py::app_70b
 
 # (Recommended) Cache the 70B model to avoid repeated downloads
 # This downloads ~140GB once and stores it on the Modal volume
 # Saves 10-15 minutes on every subsequent deployment
-modal run src/modal_deployments/unified_probe_service_70b.py::download_model_to_volume
+modal run src/modal_deployments/unified_probe_service.py::download_model_to_volume_70b
 ```
 
 **70B Model Caching:**
@@ -67,7 +67,7 @@ The 70B model is large (~140GB) and takes 10-15 minutes to download on each cold
 
 1. **One-time caching** (recommended):
    ```bash
-   modal run src/modal_deployments/unified_probe_service_70b.py::download_model_to_volume
+   modal run src/modal_deployments/unified_probe_service.py::download_model_to_volume_70b
    ```
    This downloads the model once to `/volume/models/huggingface/` on the Modal volume.
 

@@ -12,7 +12,6 @@ Requirements:
 """
 
 import pytest
-
 from src.backends import create_backend
 from src.config.experiment_config import get_experiment_config
 from src.experiments.ttl.configs import create_ttl_config
@@ -209,7 +208,7 @@ class TestBackendIntegration70B:
     Test 70B backend with various probe configurations.
 
     NOTE: These tests require unified-probe-service-70b to be deployed:
-    - modal deploy src/modal_deployments/unified_probe_service_70b.py
+    - modal deploy src/modal_deployments/unified_probe_service.py::app_70b
     - 4x H100 GPUs required
     - Expensive to run
     """

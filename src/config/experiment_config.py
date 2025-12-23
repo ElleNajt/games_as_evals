@@ -102,6 +102,7 @@ def get_experiment_config(preset: str) -> ExperimentConfig:
 
     Available presets:
         - 8b_both: 8B model with deception + hallucination probes
+        - 8b_both_massmean: 8B model with massmean deception probe (78% val) + hallucination probe
         - 70b_both: 70B model with deception + hallucination probes
         - 8b_deception: 8B model with deception probe only
         - 8b_hallucination: 8B model with hallucination probe only
@@ -123,6 +124,18 @@ def get_experiment_config(preset: str) -> ExperimentConfig:
             probes=["deception_8b", "hallucination_8b"],
             top_k_logits=10,
             description="8B model with both deception and hallucination probes",
+        ),
+        "8b_both_massmean": ExperimentConfig(
+            model="meta-llama/Meta-Llama-3.1-8B-Instruct",
+            probes=["deception_8b_massmean", "hallucination_8b"],
+            top_k_logits=10,
+            description="8B model with massmean deception probe (78% val acc) and hallucination probe",
+        ),
+        "8b_deception_massmean": ExperimentConfig(
+            model="meta-llama/Meta-Llama-3.1-8B-Instruct",
+            probes=["deception_8b_massmean"],
+            top_k_logits=10,
+            description="8B model with massmean deception probe only (78% val acc)",
         ),
         "70b_both": ExperimentConfig(
             model="meta-llama/Llama-3.3-70B-Instruct",

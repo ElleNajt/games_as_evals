@@ -4,26 +4,27 @@ Integration tests for Modal backends with real probe deployments.
 These tests actually connect to Modal and verify that probes return valid scores.
 They are slower than unit tests and require Modal setup.
 
-Run with: pytest src/tests/test_modal_integration.py -v
+Run with: pytest -m expensive tests/integration/backends/test_modal_integration.py -v
 """
 
 import pytest
-from ..backends import create_backend
-from ..player import GamePlayer
+from src.backends import create_backend
+from src.player import GamePlayer
 
 
+@pytest.mark.expensive
 class TestModalDeception8B:
     """Test Modal backend with 8B deception probe."""
     
     def test_modal_deception_8b_connects(self):
         """Test that we can connect to the deception_8b probe service."""
-        backend = create_backend("modal", probe="deception_8b")
-        assert backend.modal_app_name == "werewolf-apollo-probe"
+        backend = create_backend("modal", probes=["deception_8b"])
+        assert backend.modal_app_name == "unified-probe-service"
         assert backend.supports_probes == True
-    
+
     def test_modal_deception_8b_generates_text(self):
         """Test that deception_8b probe generates non-empty text."""
-        backend = create_backend("modal", probe="deception_8b")
+        backend = create_backend("modal", probes=["deception_8b"])
         player = GamePlayer("TestPlayer", backend, "You are a strategic player.")
         
         result = player.query("Say hello", max_tokens=50, temperature=0.7)
@@ -34,7 +35,7 @@ class TestModalDeception8B:
     
     def test_modal_deception_8b_returns_probe_scores(self):
         """Test that deception_8b probe returns non-zero probe scores."""
-        backend = create_backend("modal", probe="deception_8b")
+        backend = create_backend("modal", probes=["deception_8b"])
         player = GamePlayer(
             "TestPlayer", 
             backend,
@@ -63,7 +64,7 @@ class TestModalDeception8B:
     
     def test_modal_deception_8b_tokens_match_scores(self):
         """Test that number of tokens matches number of scores."""
-        backend = create_backend("modal", probe="deception_8b")
+        backend = create_backend("modal", probes=["deception_8b"])
         player = GamePlayer("TestPlayer", backend, "You are a player in a game.")
         
         result = player.query("What's your strategy?", max_tokens=50)
@@ -76,19 +77,20 @@ class TestModalDeception8B:
             print(f"✓ Scores: {len(result.probe_scores.token_scores)}")
 
 
+@pytest.mark.expensive
 class TestModalDeception70B:
     """Test Modal backend with 70B deception probe."""
     
     def test_modal_deception_70b_connects(self):
         """Test that we can connect to the deception_70b probe service."""
-        backend = create_backend("modal", probe="deception_70b")
-        assert backend.modal_app_name == "werewolf-apollo-probe-70b"
+        backend = create_backend("modal", probes=["deception_70b"])
+        assert backend.modal_app_name == "unified-probe-service-70b"
         assert backend.supports_probes == True
     
     @pytest.mark.slow
     def test_modal_deception_70b_returns_probe_scores(self):
         """Test that deception_70b probe returns non-zero probe scores."""
-        backend = create_backend("modal", probe="deception_70b")
+        backend = create_backend("modal", probes=["deception_70b"])
         player = GamePlayer(
             "TestPlayer",
             backend,
@@ -110,19 +112,20 @@ class TestModalDeception70B:
         print(f"✓ Generated: {result.text[:100]}...")
 
 
+@pytest.mark.expensive
 class TestModalHallucination:
     """Test Modal backend with hallucination probe."""
     
     def test_modal_hallucination_8b_connects(self):
         """Test that we can connect to the hallucination_8b probe service."""
-        backend = create_backend("modal", probe="hallucination_8b")
-        assert backend.modal_app_name == "hallucination-probe-backend"
+        backend = create_backend("modal", probes=["hallucination_8b"])
+        assert backend.modal_app_name == "unified-probe-service"
         assert backend.supports_probes == True
     
     @pytest.mark.slow
     def test_modal_hallucination_8b_returns_probe_scores(self):
         """Test that hallucination_8b probe returns non-zero probe scores."""
-        backend = create_backend("modal", probe="hallucination_8b")
+        backend = create_backend("modal", probes=["hallucination_8b"])
         player = GamePlayer(
             "TestPlayer",
             backend,
@@ -144,6 +147,7 @@ class TestModalHallucination:
         print(f"✓ Generated: {result.text[:100]}...")
 
 
+@pytest.mark.expensive
 class TestBackendComparison:
     """Compare different backends to ensure consistent behavior."""
     
@@ -155,7 +159,7 @@ class TestBackendComparison:
         
         # Create both backends
         claude_backend = create_backend("claude")
-        modal_backend = create_backend("modal", probe="deception_8b")
+        modal_backend = create_backend("modal", probes=["deception_8b"])
         
         # Create players
         claude_player = GamePlayer("ClaudePlayer", claude_backend, system_prompt)
@@ -181,12 +185,13 @@ class TestBackendComparison:
         print(f"✓ Modal probe score: {modal_result.probe_scores.aggregate_score:.3f}")
 
 
+@pytest.mark.expensive
 class TestProbeScoreRanges:
     """Test that probe scores are returned for different prompts."""
     
     def test_truthful_prompt_returns_scores(self):
         """Test that truthful statements get probe scores."""
-        backend = create_backend("modal", probe="deception_8b")
+        backend = create_backend("modal", probes=["deception_8b"])
         player = GamePlayer(
             "TestPlayer",
             backend,
@@ -210,7 +215,7 @@ class TestProbeScoreRanges:
     
     def test_deceptive_prompt_returns_scores(self):
         """Test that explicitly deceptive prompts produce measurable scores."""
-        backend = create_backend("modal", probe="deception_8b")
+        backend = create_backend("modal", probes=["deception_8b"])
         player = GamePlayer(
             "TestPlayer",
             backend,
@@ -233,12 +238,13 @@ class TestProbeScoreRanges:
         assert abs(score) < 200, "Score should be reasonable magnitude"
 
 
+@pytest.mark.expensive
 class TestProbeMetadata:
     """Test that probe metadata is correctly populated."""
     
     def test_probe_metadata_fields(self):
         """Test that probe scores include expected metadata."""
-        backend = create_backend("modal", probe="deception_8b")
+        backend = create_backend("modal", probes=["deception_8b"])
         player = GamePlayer("TestPlayer", backend, "You are a player.")
         
         result = player.query("Say something", max_tokens=50)

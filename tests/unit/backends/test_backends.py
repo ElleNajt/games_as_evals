@@ -3,12 +3,11 @@
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-
-from ..backends import create_backend
-from ..backends.base import GenerationResult, ProbeScoreData, ProbeScores
-from ..backends.claude_backend import ClaudeBackend
-from ..backends.modal_backend import ModalBackend
-from ..backends.openrouter_backend import OpenRouterBackend
+from src.backends import create_backend
+from src.backends.base import GenerationResult, ProbeScoreData, ProbeScores
+from src.backends.claude_backend import ClaudeBackend
+from src.backends.modal_backend import ModalBackend
+from src.backends.openrouter_backend import OpenRouterBackend
 
 
 class TestClaudeBackend:

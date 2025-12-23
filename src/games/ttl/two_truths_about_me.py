@@ -118,9 +118,19 @@ def run_experiment(
         result["generated_tokens"], result["probe_probs"], result.get("token_entropies", [])
     )
 
+    # Validate all scores are present
+    for score_dict, score_name in [(avg_scores, "avg_scores"), (sum_scores, "sum_scores"), (max_scores, "max_scores")]:
+        missing = [i for i in range(1, 4) if i not in score_dict]
+        if missing:
+            raise ValueError(
+                f"{score_name} missing scores for statements: {missing}. "
+                f"This indicates a bug in probe score calculation. "
+                f"Available: {list(score_dict.keys())}"
+            )
+
     print("\n📊 Probe scores (higher = more likely to be a lie):")
     for i in range(1, 4):
-        print(f"  Statement {i}: avg={avg_scores.get(i, 0.0):.4f}, sum={sum_scores.get(i, 0.0):.4f}, max={max_scores.get(i, 0.0):.4f}")
+        print(f"  Statement {i}: avg={avg_scores[i]:.4f}, sum={sum_scores[i]:.4f}, max={max_scores[i]:.4f}")
 
     # Step 3: Probe's guess (highest score)
     probe_guess_avg = max(avg_scores.items(), key=lambda x: x[1])[0]

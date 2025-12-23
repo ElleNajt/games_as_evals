@@ -232,10 +232,8 @@ def run_game_round(
                 ]
                 if not scores_for_pos:
                     raise ValueError(f"No probe scores found for position {pos_int}")
-                # Store with string key for compatibility with auditor
-                aggregated_scores[str(pos_int)] = sum(scores_for_pos) / len(
-                    scores_for_pos
-                )
+                # Use integer keys consistently throughout
+                aggregated_scores[pos_int] = sum(scores_for_pos) / len(scores_for_pos)
 
             auditor_with_probe = auditor_unified.make_guess(
                 auditor,
