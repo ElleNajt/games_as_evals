@@ -15,7 +15,7 @@ def run_experiment():
         name="template",
         backend_type="modal",
         model="meta-llama/Meta-Llama-3.1-70B-Instruct",
-        probes=["deception_70b_massmean", "hallucination_70b"],
+        probes=["deception_70b", "hallucination_70b"],
         max_tokens=512,
         temperature=0.7,
         system_prompt="""You are a strategic card game player participating in Cheat (Bullshit).
