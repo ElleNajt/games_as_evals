@@ -151,18 +151,26 @@ class CheatOrchestrator:
 
         # Log the play
         was_honest = all(c.rank == self.state.current_rank for c in cards_to_play)
-        self.logger.log_game_event(
-            "card_play",
-            {
-                "turn": self.state.turn_number,
-                "player": current_player_state.name,
-                "claimed_rank": str(self.state.current_rank),
-                "claimed_count": claimed_count,
-                "actual_cards": [str(c) for c in cards_to_play],
-                "was_honest": was_honest,
-                "pile_size_after": len(self.state.pile),
-            },
-        )
+        event_data = {
+            "turn": self.state.turn_number,
+            "player": current_player_state.name,
+            "claimed_rank": str(self.state.current_rank),
+            "claimed_count": claimed_count,
+            "actual_cards": [str(c) for c in cards_to_play],
+            "was_honest": was_honest,
+            "pile_size_after": len(self.state.pile),
+        }
+
+        # Add probe scores if available
+        if play_result.get("probe_scores"):
+            probe_scores = play_result["probe_scores"]
+            # Extract aggregate score for each probe
+            event_data["probe_scores"] = {
+                probe_name: probe_data.aggregate_score
+                for probe_name, probe_data in probe_scores.scores.items()
+            }
+
+        self.logger.log_game_event("card_play", event_data)
 
         print(
             f"{current_player_state.name} plays {claimed_count} {self.state.current_rank}(s)"
