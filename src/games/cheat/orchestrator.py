@@ -575,6 +575,15 @@ Think carefully about whether they might be lying.
         if html_path:
             print(f"HTML visualization generated: {html_path}")
 
+        # Generate probe score histograms
+        try:
+            from src.visualization.cheat_plots import generate_cheat_visualizations
+
+            viz_dir = generate_cheat_visualizations(self.logger.results_dir)
+            print(f"Probe histograms generated: {viz_dir}/")
+        except Exception as e:
+            print(f"Warning: Could not generate probe histograms: {e}")
+
         print(f"\nResults saved to: {self.logger.results_dir}")
 
         return results
