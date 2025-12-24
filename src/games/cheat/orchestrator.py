@@ -293,25 +293,21 @@ TASK:
 
 Remember: Honesty is usually the best strategy when you have the required cards!
 
-CRITICAL: You MUST respond in this EXACT format. Do NOT add extra text.
+RESPONSE FORMAT - Follow this EXACTLY:
+ACTUAL_CARDS: <comma-separated list of ranks you're actually playing from your hand>
+CLAIM: <comma-separated list of what you claim they are - must be {self.state.current_rank}>
 
-If playing HONESTLY (you have {self.state.current_rank}s):
+EXAMPLES:
+
+Honest play (you have {self.state.current_rank}s):
 ACTUAL_CARDS: {self.state.current_rank}, {self.state.current_rank}
 CLAIM: {self.state.current_rank}, {self.state.current_rank}
 
-If playing a LIE (you don't have {self.state.current_rank}s):
-ACTUAL_CARDS: <any cards from your hand, like "King, King">
+Lying play (you don't have {self.state.current_rank}s, so you play Kings instead):
+ACTUAL_CARDS: King, King
 CLAIM: {self.state.current_rank}, {self.state.current_rank}
 
-IMPORTANT: 
-- ACTUAL_CARDS must list the actual rank names from YOUR HAND (e.g., "King, King" or "Ace")
-- CLAIM is what you tell other players (must be "{self.state.current_rank}")
-- Use commas to separate multiple cards
-- You can play 1-4 cards
-
-RESPOND NOW using exactly this format:
-ACTUAL_CARDS: 
-CLAIM: 
+Remember: You can play 1-4 cards. Do NOT leave ACTUAL_CARDS empty!
 """
 
         return prompt
