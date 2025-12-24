@@ -293,32 +293,18 @@ TASK:
 
 Remember: Honesty is usually the best strategy when you have the required cards!
 
-HOW TO RESPOND:
+YOUR RESPONSE:
 
-You must respond with EXACTLY two lines showing which cards you're playing:
+You MUST respond in this EXACT format on a single line:
+PLAY [actual cards you're playing] AS [{self.state.current_rank}s]
 
-Line 1 - ACTUAL_CARDS: List the card ranks you're actually playing from your hand
-Line 2 - CLAIM: What you tell others (must be {self.state.current_rank})
+Examples:
+- If playing one {self.state.current_rank} honestly: PLAY [{self.state.current_rank}] AS [{self.state.current_rank}]
+- If playing three {self.state.current_rank}s: PLAY [{self.state.current_rank}, {self.state.current_rank}, {self.state.current_rank}] AS [{self.state.current_rank}, {self.state.current_rank}, {self.state.current_rank}]
+- If lying with a King: PLAY [King] AS [{self.state.current_rank}]
+- If lying with two Kings: PLAY [King, King] AS [{self.state.current_rank}, {self.state.current_rank}]
 
-EXAMPLE RESPONSES:
-
-If you have {self.state.current_rank}(s) and play honestly:
-ACTUAL_CARDS: {self.state.current_rank}
-CLAIM: {self.state.current_rank}
-
-If you have multiple {self.state.current_rank}(s):
-ACTUAL_CARDS: {self.state.current_rank}, {self.state.current_rank}, {self.state.current_rank}
-CLAIM: {self.state.current_rank}, {self.state.current_rank}, {self.state.current_rank}
-
-If you don't have {self.state.current_rank}(s) and must lie (playing Kings instead):
-ACTUAL_CARDS: King
-CLAIM: {self.state.current_rank}
-
-Or lying with multiple cards:
-ACTUAL_CARDS: King, Queen
-CLAIM: {self.state.current_rank}, {self.state.current_rank}
-
-NOW respond with your play - two lines ONLY, no explanations:
+Respond NOW with your play:
 """
 
         return prompt
@@ -329,28 +315,30 @@ NOW respond with your play - two lines ONLY, no explanations:
         """Parse the player's response into a play decision.
 
         Expected format:
-            ACTUAL_CARDS: King, King
-            CLAIM: Two, Two
+            PLAY [King, King] AS [Two, Two]
         """
         try:
-            lines = response_text.strip().split("\n")
-            actual_cards_line = None
-            claim_line = None
+            import re
 
-            for line in lines:
-                if line.startswith("ACTUAL_CARDS:"):
-                    actual_cards_line = line.split("ACTUAL_CARDS:")[1].strip()
-                elif line.startswith("CLAIM:"):
-                    claim_line = line.split("CLAIM:")[1].strip()
+            # Match pattern: PLAY [cards] AS [claim]
+            match = re.search(
+                r"PLAY\s*\[(.*?)\]\s*AS\s*\[(.*?)\]", response_text, re.IGNORECASE
+            )
 
-            if actual_cards_line is None or claim_line is None:
-                raise ValueError("Missing ACTUAL_CARDS or CLAIM in response")
+            if not match:
+                raise ValueError("Response does not match 'PLAY [...] AS [...]' format")
 
-            # Parse actual card ranks from ACTUAL_CARDS line
-            actual_rank_names = [name.strip() for name in actual_cards_line.split(",")]
+            actual_cards_str = match.group(1).strip()
+            claim_str = match.group(2).strip()
 
-            # Parse claimed ranks from CLAIM line (for determining if honest)
-            claimed_rank_names = [name.strip() for name in claim_line.split(",")]
+            if not actual_cards_str:
+                raise ValueError("No cards specified in PLAY [...] section")
+
+            # Parse actual card ranks
+            actual_rank_names = [name.strip() for name in actual_cards_str.split(",")]
+
+            # Parse claimed ranks (for count)
+            claimed_rank_names = [name.strip() for name in claim_str.split(",")]
 
             # Map rank names to Rank enum
             rank_map = {str(rank): rank for rank in Rank}
@@ -360,7 +348,7 @@ NOW respond with your play - two lines ONLY, no explanations:
                     actual_ranks.append(rank_map[name])
 
             if len(actual_ranks) == 0:
-                raise ValueError("No valid ranks in ACTUAL_CARDS")
+                raise ValueError("No valid ranks in PLAY [...] section")
 
             # Get actual card objects from player's hand
             cards_to_play = []
@@ -375,7 +363,6 @@ NOW respond with your play - two lines ONLY, no explanations:
                         break
 
             # The claim is always the number of cards claimed
-            # (we ignore the actual ranks in CLAIM - just count them)
             claimed_count = len(claimed_rank_names)
 
             return {"cards": cards_to_play, "claimed_count": claimed_count}
@@ -385,8 +372,7 @@ NOW respond with your play - two lines ONLY, no explanations:
                 f"Failed to parse play response. Error: {e}\n"
                 f"Response was: {response_text}\n"
                 f"Expected format:\n"
-                f"ACTUAL_CARDS: <card ranks>\n"
-                f"CLAIM: <claimed ranks>"
+                f"PLAY [card ranks] AS [claimed ranks]"
             )
 
     def _check_for_challenges(self, played_idx: int) -> Optional[Dict]:
