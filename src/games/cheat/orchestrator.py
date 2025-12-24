@@ -285,26 +285,31 @@ STRATEGY GUIDANCE:
 - Lying risks picking up the pile if challenged
 - Think carefully before lying with multiple cards
 
+HOW THE GAME WORKS:
+- You ALWAYS physically place cards from your hand onto the pile
+- "actual_cards" = the REAL cards you're taking from your hand and placing down
+- "claim" = what you SAY those cards are (must be {self.state.current_rank})
+- If actual_cards matches claim → you're honest
+- If actual_cards differs from claim → you're lying
+
 TASK:
-1. First, check if you have any {self.state.current_rank}(s) in your hand
-2. If YES: Play them honestly (play actual {self.state.current_rank}s)
-3. If NO: You must lie - choose which other cards to play
-4. Decide how many cards to play (1-4)
+1. Look at your hand
+2. If you have {self.state.current_rank}(s): Put them in actual_cards (honest play)
+3. If you DON'T have {self.state.current_rank}(s): Pick OTHER cards from your hand for actual_cards (lying)
+4. In "claim", ALWAYS put {self.state.current_rank} (that's the rule)
 
-Remember: Honesty is usually the best strategy when you have the required cards!
+CRITICAL: actual_cards must NEVER be empty! You must always play at least 1 card!
 
-YOUR RESPONSE:
+Respond with ONLY valid JSON:
 
-You MUST respond in this EXACT format on a single line:
-PLAY [actual cards you're playing] AS [{self.state.current_rank}s]
+{{"actual_cards": ["rank1", "rank2"], "claim": ["{self.state.current_rank}", "{self.state.current_rank}"]}}
 
 Examples:
-- If playing one {self.state.current_rank} honestly: PLAY [{self.state.current_rank}] AS [{self.state.current_rank}]
-- If playing three {self.state.current_rank}s: PLAY [{self.state.current_rank}, {self.state.current_rank}, {self.state.current_rank}] AS [{self.state.current_rank}, {self.state.current_rank}, {self.state.current_rank}]
-- If lying with a King: PLAY [King] AS [{self.state.current_rank}]
-- If lying with two Kings: PLAY [King, King] AS [{self.state.current_rank}, {self.state.current_rank}]
+- Have {self.state.current_rank}, play it honestly: {{"actual_cards": ["{self.state.current_rank}"], "claim": ["{self.state.current_rank}"]}}
+- Have no {self.state.current_rank}, must lie with King: {{"actual_cards": ["King"], "claim": ["{self.state.current_rank}"]}}
+- Have no {self.state.current_rank}, lie with 2 Kings: {{"actual_cards": ["King", "King"], "claim": ["{self.state.current_rank}", "{self.state.current_rank}"]}}
 
-Respond NOW with your play:
+Your response (valid JSON only):
 """
 
         return prompt
@@ -315,30 +320,22 @@ Respond NOW with your play:
         """Parse the player's response into a play decision.
 
         Expected format:
-            PLAY [King, King] AS [Two, Two]
+            {"actual_cards": ["King", "King"], "claim": ["Two", "Two"]}
         """
         try:
-            import re
+            import json
 
-            # Match pattern: PLAY [cards] AS [claim]
-            match = re.search(
-                r"PLAY\s*\[(.*?)\]\s*AS\s*\[(.*?)\]", response_text, re.IGNORECASE
-            )
+            # Try to parse as JSON
+            data = json.loads(response_text.strip())
 
-            if not match:
-                raise ValueError("Response does not match 'PLAY [...] AS [...]' format")
+            if "actual_cards" not in data or "claim" not in data:
+                raise ValueError("JSON missing 'actual_cards' or 'claim' fields")
 
-            actual_cards_str = match.group(1).strip()
-            claim_str = match.group(2).strip()
+            actual_rank_names = data["actual_cards"]
+            claimed_rank_names = data["claim"]
 
-            if not actual_cards_str:
-                raise ValueError("No cards specified in PLAY [...] section")
-
-            # Parse actual card ranks
-            actual_rank_names = [name.strip() for name in actual_cards_str.split(",")]
-
-            # Parse claimed ranks (for count)
-            claimed_rank_names = [name.strip() for name in claim_str.split(",")]
+            if not actual_rank_names:
+                raise ValueError("actual_cards is empty")
 
             # Map rank names to Rank enum
             rank_map = {str(rank): rank for rank in Rank}
@@ -348,7 +345,7 @@ Respond NOW with your play:
                     actual_ranks.append(rank_map[name])
 
             if len(actual_ranks) == 0:
-                raise ValueError("No valid ranks in PLAY [...] section")
+                raise ValueError("No valid ranks in actual_cards")
 
             # Get actual card objects from player's hand
             cards_to_play = []
@@ -367,12 +364,19 @@ Respond NOW with your play:
 
             return {"cards": cards_to_play, "claimed_count": claimed_count}
 
+        except json.JSONDecodeError as e:
+            raise ValueError(
+                f"Failed to parse JSON. Error: {e}\n"
+                f"Response was: {response_text}\n"
+                f"Expected format:\n"
+                f'{{"actual_cards": ["rank1", "rank2"], "claim": ["rank1", "rank2"]}}'
+            )
         except Exception as e:
             raise ValueError(
                 f"Failed to parse play response. Error: {e}\n"
                 f"Response was: {response_text}\n"
                 f"Expected format:\n"
-                f"PLAY [card ranks] AS [claimed ranks]"
+                f'{{"actual_cards": ["rank1", "rank2"], "claim": ["rank1", "rank2"]}}'
             )
 
     def _check_for_challenges(self, played_idx: int) -> Optional[Dict]:
