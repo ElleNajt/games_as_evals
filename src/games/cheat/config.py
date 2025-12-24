@@ -3,7 +3,7 @@ Configuration for the Cheat (Bullshit) card game.
 """
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Dict
 from src.config.game_config import GameConfig
 from src.config.player_config import PlayerConfig
 
@@ -28,6 +28,7 @@ class CheatConfig(GameConfig):
     
     # Probe visibility control
     provide_probe_scores: bool = False  # If True, show probe scores to players during challenges
+    probe_thresholds: Optional[Dict[str, Dict[str, float]]] = None  # Thresholds for interpreting probe scores
     
     def __post_init__(self):
         """Validate config and generate player list."""
