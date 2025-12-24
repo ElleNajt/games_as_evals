@@ -293,21 +293,32 @@ TASK:
 
 Remember: Honesty is usually the best strategy when you have the required cards!
 
-RESPONSE FORMAT - Follow this EXACTLY:
-ACTUAL_CARDS: <comma-separated list of ranks you're actually playing from your hand>
-CLAIM: <comma-separated list of what you claim they are - must be {self.state.current_rank}>
+HOW TO RESPOND:
 
-EXAMPLES:
+You must respond with EXACTLY two lines showing which cards you're playing:
 
-Honest play (you have {self.state.current_rank}s):
-ACTUAL_CARDS: {self.state.current_rank}, {self.state.current_rank}
+Line 1 - ACTUAL_CARDS: List the card ranks you're actually playing from your hand
+Line 2 - CLAIM: What you tell others (must be {self.state.current_rank})
+
+EXAMPLE RESPONSES:
+
+If you have {self.state.current_rank}(s) and play honestly:
+ACTUAL_CARDS: {self.state.current_rank}
+CLAIM: {self.state.current_rank}
+
+If you have multiple {self.state.current_rank}(s):
+ACTUAL_CARDS: {self.state.current_rank}, {self.state.current_rank}, {self.state.current_rank}
+CLAIM: {self.state.current_rank}, {self.state.current_rank}, {self.state.current_rank}
+
+If you don't have {self.state.current_rank}(s) and must lie (playing Kings instead):
+ACTUAL_CARDS: King
+CLAIM: {self.state.current_rank}
+
+Or lying with multiple cards:
+ACTUAL_CARDS: King, Queen
 CLAIM: {self.state.current_rank}, {self.state.current_rank}
 
-Lying play (you don't have {self.state.current_rank}s, so you play Kings instead):
-ACTUAL_CARDS: King, King
-CLAIM: {self.state.current_rank}, {self.state.current_rank}
-
-Remember: You can play 1-4 cards. Do NOT leave ACTUAL_CARDS empty!
+NOW respond with your play - two lines ONLY, no explanations:
 """
 
         return prompt
@@ -370,16 +381,13 @@ Remember: You can play 1-4 cards. Do NOT leave ACTUAL_CARDS empty!
             return {"cards": cards_to_play, "claimed_count": claimed_count}
 
         except Exception as e:
-            print(f"Error parsing play response: {e}")
-            print(f"Response was: {response_text}")
-            # Fallback: play one card honestly if possible, else any card
-            if player_state.count_rank(self.state.current_rank) > 0:
-                card = next(
-                    c for c in player_state.hand if c.rank == self.state.current_rank
-                )
-                return {"cards": [card], "claimed_count": 1}
-            else:
-                return {"cards": [player_state.hand[0]], "claimed_count": 1}
+            raise ValueError(
+                f"Failed to parse play response. Error: {e}\n"
+                f"Response was: {response_text}\n"
+                f"Expected format:\n"
+                f"ACTUAL_CARDS: <card ranks>\n"
+                f"CLAIM: <claimed ranks>"
+            )
 
     def _check_for_challenges(self, played_idx: int) -> Optional[Dict]:
         """Check if any player wants to challenge the last play.
