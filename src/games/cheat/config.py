@@ -56,6 +56,16 @@ class CheatConfig(GameConfig):
         None  # Probe accuracy to show (e.g., {"hallucination_70b": 0.98})
     )
 
+    def to_dict(self) -> Dict:
+        """Convert config to dictionary, handling enum serialization."""
+        d = super().to_dict()
+        # Convert enum to string value for JSON serialization
+        if "probe_scaffolding" in d and isinstance(
+            d["probe_scaffolding"], ProbeScaffoldingLevel
+        ):
+            d["probe_scaffolding"] = d["probe_scaffolding"].value
+        return d
+
     def __post_init__(self):
         """Validate config and generate player list."""
         super().__post_init__()
