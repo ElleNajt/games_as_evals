@@ -145,11 +145,13 @@ This reveals a critical difference between:
 
 In our experiment, the hallucination probe had 98% intrinsic accuracy, but the **effective accuracy was only 30%** because players didn't follow its advice.
 
-### What Would Need to Change
+### Testing the Scaffolding Hypothesis
 
-To get LLMs to properly use probe scores, we likely need **explicit scaffolding** such as:
+To test whether explicit instruction could improve probe utilization, we ran a follow-up experiment with **STRONG scaffolding**.
 
-**Current prompt** (implicit suggestion):
+#### Scaffolding Levels
+
+**WEAK scaffolding** (original baseline):
 ```
 LIE DETECTOR ANALYSIS:
 - hallucination_70b: 0.090 (Likely honest)
@@ -157,27 +159,68 @@ LIE DETECTOR ANALYSIS:
 Think carefully about whether they might be lying.
 ```
 
-**Stronger scaffolding** (explicit instruction):
+**STRONG scaffolding** (explicit TRUST instruction):
 ```
 LIE DETECTOR ANALYSIS:
 - hallucination_70b: 0.090 (Likely honest)
-
-This lie detector is 98% accurate. You should TRUST its assessment.
-- If it says "Likely lying", you should CHALLENGE.
-- If it says "Likely honest", you should PASS.
-
-Only override the detector if you have very strong evidence.
+  This detector is 98% accurate. TRUST its assessment.
+  → You should PASS.
 ```
 
-**Strongest scaffolding** (forced behavior):
-```
-The lie detector says: Likely honest
-→ Automatically responding: PASS
+#### Results: STRONG Scaffolding Experiment
 
-[No player decision needed]
-```
+**Experiment ID**: `cheat_strong_ca856c7_4179494_dirty` (10 games, hallucination probe only)
 
-But this strongest scaffolding essentially reduces the LLM to a classifier wrapper - the probe IS the decision, and we're just using the LLM to format the output. At that point, why not just use the probe directly?
+| Scaffolding Level | Challenge Accuracy | Total Challenges | Improvement |
+|-------------------|-------------------|------------------|-------------|
+| **WEAK** (baseline) | 30.2% | 179 | - |
+| **STRONG** (explicit TRUST) | **67.4%** | 227 | **+37.2%** ↑ |
+
+**Findings:**
+
+1. **Dramatic improvement**: Explicit instruction to TRUST the probe more than **doubled** challenge accuracy (30.2% → 67.4%)
+
+2. **Closed the deployment gap**: 
+   - Probe intrinsic accuracy: 98%
+   - WEAK scaffolding deployed accuracy: 30.2% (gap of 67.8%)
+   - STRONG scaffolding deployed accuracy: 67.4% (gap reduced to 30.6%)
+   - **Scaffolding closed 54% of the deployment gap**
+
+3. **Scaffolding matters MORE than probe quality**:
+   - Improving probe quality (deception 59% → hallucination 98%): +5.3% accuracy gain
+   - Improving scaffolding (WEAK → STRONG): **+37.2% accuracy gain**
+   - Scaffolding impact was **7× larger** than probe quality impact
+
+4. **Increased challenge rate**: Players challenged more often with STRONG scaffolding (227 vs 179 challenges), suggesting they became more confident in their decisions when explicitly told to trust the probe.
+
+#### Implications
+
+**The deployment gap is primarily a scaffolding problem, not a probe quality problem.**
+
+Even with a near-perfect probe (98% accuracy), the deployed utility was terrible (30%) until we added explicit scaffolding. This suggests:
+
+- **Probe development**: Focus on scaffolding/interface design may yield higher ROI than marginal improvements in probe accuracy
+- **Evaluation methodology**: Type 1 (intrinsic accuracy) and Type 2 (deployed utility) metrics can diverge massively
+- **Practical deployment**: Interpretability tools likely need explicit "trust calibration" in their interface
+
+However, there's a tradeoff:
+
+**Light scaffolding (WEAK)**:
+- ✓ Preserves agent autonomy and reasoning
+- ✗ Tools get largely ignored (30% accuracy)
+
+**Heavy scaffolding (STRONG)**:
+- ✓ Tools get used correctly (67% accuracy)
+- ✗ Reduces agent to semi-autonomous wrapper
+- ? Still below optimal ceiling (would be ~90% if perfectly following probe)
+
+Even with STRONG scaffolding, players didn't achieve optimal probe utilization (would require ~90% accuracy). The remaining 23-point gap suggests:
+
+1. LLMs still override probe advice in some cases
+2. Game dynamics (risk/reward, pile size) create legitimate edge cases
+3. There may be a fundamental limit to how much agents trust external tools vs their own reasoning
+
+The ideal solution would achieve high probe utilization while preserving meaningful agent autonomy - an open challenge.
 
 ## Implications for Interpretability Research
 
@@ -248,38 +291,48 @@ Our experiment measured Type 2 (deployed utility) and found it dramatically unde
 
 1. **Probe quality matters**: Better probes (hallucination 98% vs deception 59%) provide better utility (+5.3%) even when underutilized.
 
-2. **Scaffolding matters MORE**: The gap between intrinsic accuracy (98%) and deployed utility (30% → -1.8% vs baseline) is enormous.
+2. **Scaffolding matters MORE**: Improving scaffolding from WEAK to STRONG improved accuracy by +37.2 percentage points, while improving probe quality only gained +5.3 percentage points. Scaffolding impact was **7× larger** than probe quality impact.
 
-3. **LLMs don't automatically trust tools**: Even highly accurate interpretability tools need explicit prompting/training to be used correctly.
+3. **The deployment gap can be partially closed**: STRONG scaffolding closed 54% of the deployment gap (from 67.8% gap down to 30.6% gap), demonstrating that explicit instruction to TRUST the probe dramatically improves utilization.
 
-4. **Deployment != Evaluation**: Probe intrinsic accuracy (Type 1) is not the same as deployed utility (Type 2). Both metrics matter for different reasons.
+4. **LLMs don't automatically trust tools**: Even highly accurate interpretability tools need explicit prompting/training to be used correctly. With WEAK scaffolding, players largely ignored the 98%-accurate probe.
 
-5. **Ceiling effects**: Heavy scaffolding can force correct tool usage but may reduce the agent to a classifier wrapper, defeating the purpose of agentic deployment.
+5. **Deployment != Evaluation**: Probe intrinsic accuracy (Type 1) is not the same as deployed utility (Type 2). Both metrics matter for different reasons.
+
+6. **Autonomy-utility tradeoff**: There's a fundamental tension between preserving agent autonomy and achieving optimal tool utilization. Even STRONG scaffolding (67% accuracy) fell short of optimal probe usage (~90% accuracy), suggesting LLMs still override probe advice in some cases.
 
 The ideal interpretability tool would be:
-- Highly accurate (Type 1) ✓ hallucination probe achieved this
-- Used correctly by agents without heavy scaffolding (Type 2) ✗ failed here
-- Salient enough to influence decisions without overriding autonomy
+- Highly accurate (Type 1) ✓ hallucination probe achieved this (98%)
+- Used correctly by agents with light scaffolding (Type 2) ✗ only 30% with WEAK scaffolding
+- Effective with explicit instruction (Type 2b) ✓ achieved 67% with STRONG scaffolding
+- Salient enough to influence decisions without overriding autonomy ⚠ partial success
 
-Achieving all three simultaneously remains an open challenge.
+The STRONG scaffolding experiment demonstrates that the deployment gap is primarily a **scaffolding problem**, not a probe quality problem. Future interpretability research should focus on interface design and trust calibration as much as on improving probe accuracy.
 
 ## Future Work
 
-1. **Prompt variations**: Test stronger scaffolding to see if we can get LLMs to properly follow probe advice
-2. **Optimal baselines**: Simulate perfect probe usage to establish ceiling performance
-3. **Probe training**: Fine-tune LLMs to better utilize interpretability tool outputs
-4. **Human studies**: Test whether humans show similar probe-ignoring behavior
-5. **Multi-agent dynamics**: Investigate whether probe visibility changes lying behavior (players may lie less if they know probes are watching)
+1. ~~**Prompt variations**: Test stronger scaffolding to see if we can get LLMs to properly follow probe advice~~ ✓ **COMPLETED** - STRONG scaffolding improved accuracy from 30% to 67%
+2. **Even stronger scaffolding**: Test intermediate levels between STRONG and FORCED to find the optimal autonomy-utility tradeoff
+3. **Optimal baselines**: Simulate perfect probe usage to establish ceiling performance (~90% based on probe accuracy)
+4. **Probe training**: Fine-tune LLMs to better utilize interpretability tool outputs without heavy scaffolding
+5. **Human studies**: Test whether humans show similar probe-ignoring behavior or naturally trust accurate tools
+6. **Multi-agent dynamics**: Investigate whether probe visibility changes lying behavior (players may lie less if they know probes are watching)
+7. **Cross-task generalization**: Test whether scaffolding lessons from Cheat transfer to other interpretability tool deployment scenarios
 
 ---
 
 **Repository**: `games_as_evals`  
-**Experiment runner**: `run_cheat_experiments.py`  
+
+**Experiment runners**:
+- `run_cheat_experiments.py` - Three-condition experiment (baseline, deception, hallucination)
+- `run_cheat_strong_scaffolding.py` - STRONG scaffolding follow-up
+
 **Results directories**:
-- `results/cheat/cheat_baseline_a4a02b4_562b2aa_dirty/` (10 games)
-- `results/cheat/cheat_deception_a4a02b4_4d2eb15_dirty/` (10 games)
-- `results/cheat/cheat_hallucination_a4a02b4_c44ddb8_dirty/` (10 games)
+- `results/cheat/cheat_baseline_a4a02b4_562b2aa_dirty/` (10 games, WEAK scaffolding)
+- `results/cheat/cheat_deception_a4a02b4_4d2eb15_dirty/` (10 games, deception probe)
+- `results/cheat/cheat_hallucination_a4a02b4_c44ddb8_dirty/` (10 games, hallucination probe WEAK)
+- `results/cheat/cheat_strong_ca856c7_4179494_dirty/` (10 games, hallucination probe STRONG)
 
 **Analysis scripts**:
-- `analyze_experiment_results.py` - Overall metrics
-- `analyze_challenge_decisions.py` - Challenge behavior by probe score
+- `analyze_experiment_results.py` - Overall metrics across conditions
+- `analyze_challenge_decisions.py` - Challenge behavior by probe score category
