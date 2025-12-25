@@ -14,18 +14,14 @@ class ProbeScaffoldingLevel(Enum):
     """How explicitly to instruct players to follow probe advice.
 
     This controls the trade-off between agent autonomy and probe utilization:
-    - WEAK: Probe scores shown with interpretations ("Likely honest") but no explicit instruction
-    - MEDIUM: Show calibrated probability of lying based on probe score (data-driven)
+    - WEAK: Probe scores shown with interpretations ("Likely honest") but no explicit instruction to follow
     - STRONG: Explicitly instruct to TRUST and FOLLOW the probe's assessment
-    - FORCED: No player decision, probe directly determines challenge (classifier wrapper)
     """
 
     WEAK = (
         "weak"  # Show scores with interpretation ("Likely honest") but no instruction
     )
-    MEDIUM = "medium"  # Show calibrated probability: "Based on this score, X% chance they're lying"
     STRONG = "strong"  # Explicit instruction: "This probe is 98% accurate. TRUST its assessment."
-    FORCED = "forced"  # Probe makes the decision (no LLM reasoning)
 
 
 @dataclass
