@@ -203,14 +203,15 @@ The player with the most satisfied clauses wins!"""
         self, player: SATPlayer, unassigned: List[int]
     ) -> str:
         """Create prompt for player to assign a variable."""
-        # Get player's clauses
-        player_clauses = [
-            self.state.formula.clauses[i] for i in sorted(player.clause_indices)
-        ]
-        player_formula_str = " ∧ ".join(str(clause) for clause in player_clauses)
 
-        # Get current scores
-        score_status = []
+        # Build the prompt showing ALL players' clauses grouped by owner
+        output = []
+        output.append(f"You are {player.name} in a COMPETITIVE 3-SAT game.")
+        output.append("")
+        output.append("=" * 60)
+        output.append("CURRENT SCORES")
+        output.append("=" * 60)
+
         for p in self.state.players:
             satisfied = sum(
                 1
@@ -218,27 +219,59 @@ The player with the most satisfied clauses wins!"""
                 if self.state.formula.clauses[idx].evaluate(self.state.assignment)
                 is True
             )
-            score_status.append(f"{p.name}: {satisfied}/{len(p.clause_indices)}")
+            output.append(
+                f"{p.name}: {satisfied}/{len(p.clause_indices)} clauses satisfied"
+            )
+        output.append("")
 
-        prompt = f"""You are {player.name} in a COMPETITIVE 3-SAT game.
+        output.append("=" * 60)
+        output.append("CURRENT VARIABLE ASSIGNMENTS")
+        output.append("=" * 60)
+        if self.state.assignment:
+            for var in sorted(self.state.assignment.keys()):
+                output.append(f"x{var} = {self.state.assignment[var]}")
+        else:
+            output.append("(none yet)")
+        output.append("")
 
-CURRENT SCORES (satisfied clauses):
-{chr(10).join(score_status)}
+        output.append("=" * 60)
+        output.append("ALL PLAYERS' CLAUSES (grouped by owner)")
+        output.append("=" * 60)
+        output.append("")
 
-YOUR CLAUSES (you win by satisfying these):
-{player_formula_str}
+        # Show each player's clauses
+        for p in self.state.players:
+            p_unassigned = sorted(p.get_unassigned_variables(self.state.assignment))
 
-Your variables: {sorted(player.variables)}
-Unassigned variables: {sorted(unassigned)}
-Current assignment: {self.state.assignment}
+            if p.id == player.id:
+                output.append(f"YOUR CLAUSES ({p.name}) - YOU WIN BY SATISFYING THESE:")
+            else:
+                output.append(f"{p.name}'s CLAUSES:")
 
-ALL CLAUSES:
-{self.state.formula}
+            output.append(f"  Variables: {sorted(p.variables)}")
+            output.append(f"  Unassigned: {p_unassigned}")
 
-Choose ONE variable from your unassigned variables and set it to True or False.
-Focus on satisfying YOUR clauses to maximize YOUR score!
-Respond with: "x<variable> = <True/False>"
+            for clause_idx in sorted(p.clause_indices):
+                clause = self.state.formula.clauses[clause_idx]
+                status = clause.evaluate(self.state.assignment)
+                if status is True:
+                    status_str = "✓ SATISFIED"
+                elif status is False:
+                    status_str = "✗ UNSATISFIED"
+                else:
+                    status_str = "? UNDETERMINED"
+                output.append(f"  Clause {clause_idx}: {clause} [{status_str}]")
+            output.append("")
 
-Example: "x3 = True"
-"""
-        return prompt
+        output.append("=" * 60)
+        output.append("YOUR TURN")
+        output.append("=" * 60)
+        output.append(f"Your unassigned variables: {sorted(unassigned)}")
+        output.append("")
+        output.append("Choose ONE variable and set it to True or False.")
+        output.append("Focus on satisfying YOUR clauses to maximize YOUR score!")
+        output.append("")
+        output.append('Respond with: "x<variable> = <True/False>"')
+        output.append('Example: "x3 = True"')
+
+        return "\n".join(output)
