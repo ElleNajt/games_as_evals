@@ -270,7 +270,7 @@ The player with the most satisfied clauses wins!"""
             prompt += "\n- How can you maximize YOUR score?"
 
             # Query player
-            response = player.query(prompt, max_tokens=500)
+            response = player.query(prompt, max_tokens=4000)
             thinking_responses[i] = response.text
 
         return thinking_responses
