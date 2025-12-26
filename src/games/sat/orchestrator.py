@@ -63,6 +63,10 @@ class SATOrchestrator:
             )
             sat_players.append(sat_player)
 
+        # Populate clause_indices for each player based on clause ownership
+        for clause_idx, clause in enumerate(formula.clauses):
+            sat_players[clause.owner].clause_indices.add(clause_idx)
+
         # Create game state
         objective = Objective.from_string(self.config.objective)
         self.state = GameState(
