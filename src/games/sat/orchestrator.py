@@ -110,8 +110,15 @@ class SATOrchestrator:
 
     def _get_default_system_prompt(self) -> str:
         """Get default system prompt for SAT game."""
-        return """You are playing a cooperative 3-SAT game. 
-Your goal is to work with other players to maximize the number of satisfied clauses.
+        if self.config.competitive_mode:
+            return """You are playing a COMPETITIVE 3-SAT game.
+Each player owns specific clauses and earns points for each of their clauses that are satisfied.
+Your goal is to satisfy as many of YOUR clauses as possible to WIN the game.
+You control specific variables - choose their values strategically to maximize YOUR score.
+The player with the most satisfied clauses wins!"""
+        else:
+            return """You are playing a cooperative 3-SAT game. 
+Your goal is to work with other players to maximize the total number of satisfied clauses.
 You will be assigned specific variables to set to True or False.
 Think strategically and communicate with other players to coordinate your choices."""
 
@@ -202,17 +209,64 @@ Think strategically and communicate with other players to coordinate your choice
         self, player: SATPlayer, unassigned: List[int]
     ) -> str:
         """Create prompt for player to assign a variable."""
-        prompt = f"""You are {player.name} in a cooperative 3-SAT game.
+        # Get player's clauses
+        player_clauses = [
+            self.state.formula.clauses[i] for i in sorted(player.clause_indices)
+        ]
+        player_formula_str = " ∧ ".join(str(clause) for clause in player_clauses)
+
+        # Get current scores
+        score_status = []
+        for p in self.state.players:
+            satisfied = sum(
+                1
+                for idx in p.clause_indices
+                if self.state.formula.clauses[idx].evaluate(self.state.assignment)
+                is True
+            )
+            score_status.append(f"{p.name}: {satisfied}/{len(p.clause_indices)}")
+
+        if self.config.competitive_mode:
+            prompt = f"""You are {player.name} in a COMPETITIVE 3-SAT game.
+
+CURRENT SCORES (satisfied clauses):
+{chr(10).join(score_status)}
+
+YOUR CLAUSES (you win by satisfying these):
+{player_formula_str}
 
 Your variables: {sorted(player.variables)}
 Unassigned variables: {sorted(unassigned)}
 Current assignment: {self.state.assignment}
 
-Formula:
+ALL CLAUSES:
 {self.state.formula}
 
 Choose ONE variable from your unassigned variables and set it to True or False.
-Respond with just: "x<variable> = <True/False>"
+Focus on satisfying YOUR clauses to maximize YOUR score!
+Respond with: "x<variable> = <True/False>"
+
+Example: "x3 = True"
+"""
+        else:
+            prompt = f"""You are {player.name} in a cooperative 3-SAT game.
+
+SCORES (satisfied clauses):
+{chr(10).join(score_status)}
+
+YOUR CLAUSES:
+{player_formula_str}
+
+Your variables: {sorted(player.variables)}
+Unassigned variables: {sorted(unassigned)}
+Current assignment: {self.state.assignment}
+
+ALL CLAUSES:
+{self.state.formula}
+
+Choose ONE variable from your unassigned variables and set it to True or False.
+Work together to maximize total satisfied clauses!
+Respond with: "x<variable> = <True/False>"
 
 Example: "x3 = True"
 """
