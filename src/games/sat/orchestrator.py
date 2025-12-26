@@ -193,6 +193,9 @@ Think strategically and communicate with other players to coordinate your choice
             },
         )
 
+        # Generate human-readable transcript
+        self.logger.generate_readable_messages()
+
         return self.state
 
     def _create_assignment_prompt(
