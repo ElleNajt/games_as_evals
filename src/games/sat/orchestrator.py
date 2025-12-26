@@ -123,13 +123,94 @@ Think strategically and communicate with other players to coordinate your choice
         print(f"\nStarting SAT game with {self.config.num_players} players")
         print(f"Formula: {self.state.formula}")
         print(f"Objective: {self.config.objective}")
-
-        # For now, just demonstrate the game can be created
-        # Full implementation would add negotiation and assignment phases
-        print("\nGame setup complete!")
         print(f"Players: {[p.name for p in self.players]}")
         print(
-            f"Variables per player: {[self.state.players[i].variables for i in range(len(self.state.players))]}"
+            f"Variables per player: {[self.state.players[i].variables for i in range(len(self.state.players))]}\n"
+        )
+
+        # Simple game loop: each round, each player assigns one variable
+        while (
+            not self.state.is_game_over()
+            and self.state.round_number <= self.config.max_turns
+        ):
+            print(f"=== Round {self.state.round_number} ===")
+
+            # Each player picks a variable to assign
+            for i, player in enumerate(self.players):
+                sat_player = self.state.players[i]
+
+                # Find unassigned variables for this player
+                unassigned = [
+                    v for v in sat_player.variables if v not in self.state.assignment
+                ]
+                if not unassigned:
+                    continue
+
+                # Create prompt for player
+                prompt = self._create_assignment_prompt(sat_player, unassigned)
+
+                # Get player's choice
+                print(f"{player.name} is choosing a variable...")
+                response = player.query(prompt)
+
+                # Parse response (simple version - just pick first unassigned variable and set to True for now)
+                variable = unassigned[0]
+                value = True
+
+                print(f"  {player.name} sets x{variable} = {value}")
+                self.state.submit_assignment(i, variable, value)
+
+            # Advance to revelation phase
+            self.state.phase = (
+                self.state.phase.REVELATION
+                if hasattr(self.state.phase, "REVELATION")
+                else None
+            )
+            self.state.advance_phase()
+
+        # Calculate final scores
+        self.state.calculate_scores()
+
+        # Count satisfied clauses
+        satisfied = sum(
+            1
+            for clause in self.state.formula.clauses
+            if clause.evaluate(self.state.assignment) is True
+        )
+
+        print(f"\n=== Game Over ===")
+        print(f"Final assignment: {self.state.assignment}")
+        print(f"Satisfied clauses: {satisfied}/{len(self.state.formula.clauses)}")
+        print(f"Player scores: {[(p.name, p.score) for p in self.state.players]}")
+
+        self.logger.log_game_event(
+            "game_end",
+            {
+                "satisfied_clauses": satisfied,
+                "total_clauses": len(self.state.formula.clauses),
+                "final_assignment": self.state.assignment,
+                "player_scores": {p.name: p.score for p in self.state.players},
+            },
         )
 
         return self.state
+
+    def _create_assignment_prompt(
+        self, player: SATPlayer, unassigned: List[int]
+    ) -> str:
+        """Create prompt for player to assign a variable."""
+        prompt = f"""You are {player.name} in a cooperative 3-SAT game.
+
+Your variables: {sorted(player.variables)}
+Unassigned variables: {sorted(unassigned)}
+Current assignment: {self.state.assignment}
+
+Formula:
+{self.state.formula}
+
+Choose ONE variable from your unassigned variables and set it to True or False.
+Respond with just: "x<variable> = <True/False>"
+
+Example: "x3 = True"
+"""
+        return prompt
