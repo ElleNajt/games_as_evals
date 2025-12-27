@@ -237,9 +237,6 @@ IMPORTANT: Effective play may require some deception:
         # Log summary
         self.logger.log_game_event('batch_summary', results)
 
-        # Save results
-        self.logger.finalize()
-
         # Print summary
         print(f"\n{'='*60}")
         print(f"Batch Complete: {num_games} games")
