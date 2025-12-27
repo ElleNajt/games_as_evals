@@ -244,7 +244,7 @@ IMPORTANT: Effective play may require some deception:
         print(f"Player 0 ({self.players[0].name}): {wins[0]} wins ({100*wins[0]/num_games:.1f}%)")
         print(f"Player 1 ({self.players[1].name}): {wins[1]} wins ({100*wins[1]/num_games:.1f}%)")
         print(f"Average payoff for Player 0: {total_payoff/num_games:.3f} chips/game")
-        print(f"Results saved to: {self.logger.run_dir}")
+        print(f"Results saved to: {self.logger.get_results_path()}")
         print(f"{'='*60}\n")
 
         return results
