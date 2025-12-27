@@ -2,7 +2,7 @@
 Configuration for Kuhn Poker.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional
 from src.config.game_config import GameConfig
 from src.config.player_config import PlayerConfig
@@ -25,6 +25,9 @@ class PokerConfig(GameConfig):
     - Bet size: 1 chip
     """
 
+    # Player configurations (input)
+    player_configs: List[PlayerConfig] = field(default_factory=list)
+
     # Game parameters
     n_cards: int = 3  # Number of cards in the deck (default: 3 for classic Kuhn Poker)
     num_games: int = 100  # Number of games to run
@@ -38,7 +41,10 @@ class PokerConfig(GameConfig):
     provide_probe_scores: bool = False  # If True, show probe scores to players
 
     def __post_init__(self):
-        """Validate config."""
+        """Validate config and populate players."""
+        # Populate self.players from player_configs before calling super().__post_init__()
+        self.players = self.player_configs
+
         super().__post_init__()
 
         # Kuhn Poker is always 2-player

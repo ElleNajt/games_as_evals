@@ -2,7 +2,7 @@
 Main game orchestrator for Kuhn Poker.
 """
 
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 import json
 from pathlib import Path
 
@@ -21,7 +21,7 @@ class PokerOrchestrator:
         self.config = config
         self.experiment_name = experiment_name
         self.game_engine: Optional[KuhnPoker] = None
-        self.players: list[PokerPlayer] = []
+        self.players: List[PokerPlayer] = []
         self.logger: Optional[ResultsLogger] = None
 
     def setup_game(self):
@@ -155,7 +155,7 @@ IMPORTANT: Effective play may require some deception:
             'n_cards': self.config.n_cards,
             'player_0_card': state.cards[0].name,
             'player_1_card': state.cards[1].name,
-        }, game_id=game_num)
+        })
 
         # Keep track of last reasoning for sharing (if enabled)
         last_reasoning = None
@@ -179,7 +179,7 @@ IMPORTANT: Effective play may require some deception:
                 'action': action.value,
                 'card': state.cards[state.current_player].name,
                 'pot': state.pot,
-            }, game_id=game_num)
+            })
 
             # Apply action
             state = self.game_engine.apply_action(action, state)
@@ -197,7 +197,7 @@ IMPORTANT: Effective play may require some deception:
             'player_0_card': state.cards[0].name,
             'player_1_card': state.cards[1].name,
             'action_history': [a.action_type.value for a in state.action_history],
-        }, game_id=game_num)
+        })
 
         return {
             'winner': winner,
@@ -205,7 +205,7 @@ IMPORTANT: Effective play may require some deception:
             'num_actions': len(state.action_history),
         }
 
-    def _finalize_batch(self, wins: list[int], total_payoff: int) -> Dict:
+    def _finalize_batch(self, wins: List[int], total_payoff: int) -> Dict:
         """
         Finalize batch and compute summary statistics.
 

@@ -126,7 +126,7 @@ def main():
 
     # Create poker config
     config = PokerConfig(
-        players=player_configs,
+        player_configs=player_configs,
         n_cards=args.n_cards,
         num_games=args.num_games,
         seed=args.seed,
