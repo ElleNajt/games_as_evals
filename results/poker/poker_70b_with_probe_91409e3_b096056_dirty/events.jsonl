@@ -1,0 +1,46 @@
+{"timestamp": "2025-12-23T14:31:11.223695", "event_type": "game_start", "data": {"game_num": 0, "n_cards": 3, "player_0_card": "QUEEN", "player_1_card": "JACK"}}
+{"timestamp": "2025-12-23T14:36:56.180025", "event_type": "action", "data": {"game_num": 0, "player": 0, "action": "check", "card": "QUEEN", "pot": 2}}
+{"timestamp": "2025-12-23T14:37:01.649807", "event_type": "action", "data": {"game_num": 0, "player": 1, "action": "bet", "card": "JACK", "pot": 2}}
+{"timestamp": "2025-12-23T14:37:04.301986", "event_type": "action", "data": {"game_num": 0, "player": 0, "action": "call", "card": "QUEEN", "pot": 3}}
+{"timestamp": "2025-12-23T14:37:04.302778", "event_type": "game_end", "data": {"game_num": 0, "winner": 0, "payoff": 2, "final_pot": 4, "player_0_card": "QUEEN", "player_1_card": "JACK", "action_history": ["check", "bet", "call"]}}
+{"timestamp": "2025-12-23T14:37:04.305065", "event_type": "game_start", "data": {"game_num": 1, "n_cards": 3, "player_0_card": "QUEEN", "player_1_card": "KING"}}
+{"timestamp": "2025-12-23T14:37:06.261402", "event_type": "action", "data": {"game_num": 1, "player": 0, "action": "check", "card": "QUEEN", "pot": 2}}
+{"timestamp": "2025-12-23T14:37:09.375312", "event_type": "action", "data": {"game_num": 1, "player": 1, "action": "bet", "card": "KING", "pot": 2}}
+{"timestamp": "2025-12-23T14:37:12.056937", "event_type": "action", "data": {"game_num": 1, "player": 0, "action": "call", "card": "QUEEN", "pot": 3}}
+{"timestamp": "2025-12-23T14:37:12.060226", "event_type": "game_end", "data": {"game_num": 1, "winner": 1, "payoff": -2, "final_pot": 4, "player_0_card": "QUEEN", "player_1_card": "KING", "action_history": ["check", "bet", "call"]}}
+{"timestamp": "2025-12-23T14:37:12.060578", "event_type": "game_start", "data": {"game_num": 2, "n_cards": 3, "player_0_card": "KING", "player_1_card": "QUEEN"}}
+{"timestamp": "2025-12-23T14:37:14.246057", "event_type": "action", "data": {"game_num": 2, "player": 0, "action": "check", "card": "KING", "pot": 2}}
+{"timestamp": "2025-12-23T14:37:16.691678", "event_type": "action", "data": {"game_num": 2, "player": 1, "action": "check", "card": "QUEEN", "pot": 2}}
+{"timestamp": "2025-12-23T14:37:16.691967", "event_type": "game_end", "data": {"game_num": 2, "winner": 0, "payoff": 1, "final_pot": 2, "player_0_card": "KING", "player_1_card": "QUEEN", "action_history": ["check", "check"]}}
+{"timestamp": "2025-12-23T14:37:16.692208", "event_type": "game_start", "data": {"game_num": 3, "n_cards": 3, "player_0_card": "JACK", "player_1_card": "QUEEN"}}
+{"timestamp": "2025-12-23T14:37:18.892496", "event_type": "action", "data": {"game_num": 3, "player": 0, "action": "bet", "card": "JACK", "pot": 2}}
+{"timestamp": "2025-12-23T14:37:21.911054", "event_type": "action", "data": {"game_num": 3, "player": 1, "action": "call", "card": "QUEEN", "pot": 3}}
+{"timestamp": "2025-12-23T14:37:21.911286", "event_type": "game_end", "data": {"game_num": 3, "winner": 1, "payoff": -2, "final_pot": 4, "player_0_card": "JACK", "player_1_card": "QUEEN", "action_history": ["bet", "call"]}}
+{"timestamp": "2025-12-23T14:37:21.911455", "event_type": "game_start", "data": {"game_num": 4, "n_cards": 3, "player_0_card": "QUEEN", "player_1_card": "KING"}}
+{"timestamp": "2025-12-23T14:37:24.222121", "event_type": "action", "data": {"game_num": 4, "player": 0, "action": "check", "card": "QUEEN", "pot": 2}}
+{"timestamp": "2025-12-23T14:37:26.283344", "event_type": "action", "data": {"game_num": 4, "player": 1, "action": "bet", "card": "KING", "pot": 2}}
+{"timestamp": "2025-12-23T14:37:29.300599", "event_type": "action", "data": {"game_num": 4, "player": 0, "action": "call", "card": "QUEEN", "pot": 3}}
+{"timestamp": "2025-12-23T14:37:29.301529", "event_type": "game_end", "data": {"game_num": 4, "winner": 1, "payoff": -2, "final_pot": 4, "player_0_card": "QUEEN", "player_1_card": "KING", "action_history": ["check", "bet", "call"]}}
+{"timestamp": "2025-12-23T14:37:29.302317", "event_type": "game_start", "data": {"game_num": 5, "n_cards": 3, "player_0_card": "JACK", "player_1_card": "QUEEN"}}
+{"timestamp": "2025-12-23T14:37:31.845234", "event_type": "action", "data": {"game_num": 5, "player": 0, "action": "bet", "card": "JACK", "pot": 2}}
+{"timestamp": "2025-12-23T14:37:33.950330", "event_type": "action", "data": {"game_num": 5, "player": 1, "action": "call", "card": "QUEEN", "pot": 3}}
+{"timestamp": "2025-12-23T14:37:33.950684", "event_type": "game_end", "data": {"game_num": 5, "winner": 1, "payoff": -2, "final_pot": 4, "player_0_card": "JACK", "player_1_card": "QUEEN", "action_history": ["bet", "call"]}}
+{"timestamp": "2025-12-23T14:37:33.950937", "event_type": "game_start", "data": {"game_num": 6, "n_cards": 3, "player_0_card": "JACK", "player_1_card": "KING"}}
+{"timestamp": "2025-12-23T14:37:36.220105", "event_type": "action", "data": {"game_num": 6, "player": 0, "action": "check", "card": "JACK", "pot": 2}}
+{"timestamp": "2025-12-23T14:37:38.861818", "event_type": "action", "data": {"game_num": 6, "player": 1, "action": "bet", "card": "KING", "pot": 2}}
+{"timestamp": "2025-12-23T14:37:41.466020", "event_type": "action", "data": {"game_num": 6, "player": 0, "action": "call", "card": "JACK", "pot": 3}}
+{"timestamp": "2025-12-23T14:37:41.467747", "event_type": "game_end", "data": {"game_num": 6, "winner": 1, "payoff": -2, "final_pot": 4, "player_0_card": "JACK", "player_1_card": "KING", "action_history": ["check", "bet", "call"]}}
+{"timestamp": "2025-12-23T14:37:41.470226", "event_type": "game_start", "data": {"game_num": 7, "n_cards": 3, "player_0_card": "JACK", "player_1_card": "KING"}}
+{"timestamp": "2025-12-23T14:37:44.446173", "event_type": "action", "data": {"game_num": 7, "player": 0, "action": "check", "card": "JACK", "pot": 2}}
+{"timestamp": "2025-12-23T14:37:46.929357", "event_type": "action", "data": {"game_num": 7, "player": 1, "action": "bet", "card": "KING", "pot": 2}}
+{"timestamp": "2025-12-23T14:37:49.367181", "event_type": "action", "data": {"game_num": 7, "player": 0, "action": "fold", "card": "JACK", "pot": 3}}
+{"timestamp": "2025-12-23T14:37:49.367463", "event_type": "game_end", "data": {"game_num": 7, "winner": 1, "payoff": -1, "final_pot": 3, "player_0_card": "JACK", "player_1_card": "KING", "action_history": ["check", "bet", "fold"]}}
+{"timestamp": "2025-12-23T14:37:49.367711", "event_type": "game_start", "data": {"game_num": 8, "n_cards": 3, "player_0_card": "JACK", "player_1_card": "KING"}}
+{"timestamp": "2025-12-23T14:37:51.827284", "event_type": "action", "data": {"game_num": 8, "player": 0, "action": "bet", "card": "JACK", "pot": 2}}
+{"timestamp": "2025-12-23T14:37:53.956984", "event_type": "action", "data": {"game_num": 8, "player": 1, "action": "call", "card": "KING", "pot": 3}}
+{"timestamp": "2025-12-23T14:37:53.957253", "event_type": "game_end", "data": {"game_num": 8, "winner": 1, "payoff": -2, "final_pot": 4, "player_0_card": "JACK", "player_1_card": "KING", "action_history": ["bet", "call"]}}
+{"timestamp": "2025-12-23T14:37:53.957485", "event_type": "game_start", "data": {"game_num": 9, "n_cards": 3, "player_0_card": "KING", "player_1_card": "QUEEN"}}
+{"timestamp": "2025-12-23T14:37:56.851167", "event_type": "action", "data": {"game_num": 9, "player": 0, "action": "bet", "card": "KING", "pot": 2}}
+{"timestamp": "2025-12-23T14:37:58.930714", "event_type": "action", "data": {"game_num": 9, "player": 1, "action": "call", "card": "QUEEN", "pot": 3}}
+{"timestamp": "2025-12-23T14:37:58.932832", "event_type": "game_end", "data": {"game_num": 9, "winner": 0, "payoff": 2, "final_pot": 4, "player_0_card": "KING", "player_1_card": "QUEEN", "action_history": ["bet", "call"]}}
+{"timestamp": "2025-12-23T14:37:58.936993", "event_type": "batch_summary", "data": {"num_games": 10, "player_0": {"name": "Player_0", "wins": 3, "win_rate": 0.3}, "player_1": {"name": "Player_1", "wins": 7, "win_rate": 0.7}, "average_payoff_player_0": -0.8}}

@@ -1,0 +1,68 @@
+{
+  "output_dir": "./results",
+  "players": [
+    {
+      "name": "Player_0",
+      "backend_type": "modal",
+      "model": "8b",
+      "probes": [
+        "deception_8b"
+      ],
+      "temperature": 0.7,
+      "max_tokens": 300,
+      "system_prompt": "",
+      "can_see_probes": false,
+      "omniscient_view": false
+    },
+    {
+      "name": "Player_1",
+      "backend_type": "modal",
+      "model": "8b",
+      "probes": [
+        "deception_8b"
+      ],
+      "temperature": 0.7,
+      "max_tokens": 300,
+      "system_prompt": "",
+      "can_see_probes": false,
+      "omniscient_view": false
+    }
+  ],
+  "git_hash": "91409e3",
+  "config_hash": "56b6f10",
+  "is_dirty": true,
+  "player_configs": [
+    {
+      "name": "Player_0",
+      "backend_type": "modal",
+      "model": "8b",
+      "probes": [
+        "deception_8b"
+      ],
+      "temperature": 0.7,
+      "max_tokens": 300,
+      "system_prompt": "",
+      "can_see_probes": false,
+      "omniscient_view": false
+    },
+    {
+      "name": "Player_1",
+      "backend_type": "modal",
+      "model": "8b",
+      "probes": [
+        "deception_8b"
+      ],
+      "temperature": 0.7,
+      "max_tokens": 300,
+      "system_prompt": "",
+      "can_see_probes": false,
+      "omniscient_view": false
+    }
+  ],
+  "n_cards": 3,
+  "num_games": 10,
+  "seed": null,
+  "use_reasoning": true,
+  "share_reasoning": false,
+  "provide_probe_scores": false
+}
