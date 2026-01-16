@@ -1,0 +1,12 @@
+{
+  "winner": null,
+  "total_turns": 120,
+  "reason": "max_turns",
+  "final_hands": {
+    "Player_1_DECEPTION": 24,
+    "Player_2": 11,
+    "Player_3": 14,
+    "Player_4": 3
+  },
+  "results_dir": "results/cheat/quick_test_deception_0755d5b_20251128_124249_0755d5b_913ea6d/game2"
+}

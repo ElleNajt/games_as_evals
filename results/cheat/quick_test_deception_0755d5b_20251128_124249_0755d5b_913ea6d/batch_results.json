@@ -1,0 +1,76 @@
+{
+  "game_name": "cheat",
+  "experiment_name": "quick_test_deception_0755d5b_20251128_124249",
+  "total_rounds": 5,
+  "successful_rounds": 5,
+  "failed_rounds": 0,
+  "success_rate": 100.0,
+  "aggregated_stats": {
+    "num_successful_rounds": 5,
+    "winner_counts": {
+      "Player_3": 1,
+      "Player_4": 2
+    },
+    "win_rates": {
+      "Player_3": 20.0,
+      "Player_4": 40.0
+    },
+    "Player_3_final_cards_mean": 7.0,
+    "Player_1_DECEPTION_final_cards_mean": 21.8,
+    "Player_4_final_cards_mean": 4.8,
+    "Player_2_final_cards_mean": 16.0,
+    "total_turns_mean": 81.4
+  },
+  "round_results": [
+    {
+      "round_id": 1,
+      "success": true,
+      "winner": null,
+      "total_turns": 120,
+      "Player_1_DECEPTION_final_cards": 23,
+      "Player_2_final_cards": 10,
+      "Player_3_final_cards": 6,
+      "Player_4_final_cards": 13
+    },
+    {
+      "round_id": 2,
+      "success": true,
+      "winner": null,
+      "total_turns": 120,
+      "Player_1_DECEPTION_final_cards": 24,
+      "Player_2_final_cards": 11,
+      "Player_3_final_cards": 14,
+      "Player_4_final_cards": 3
+    },
+    {
+      "round_id": 3,
+      "success": true,
+      "winner": "Player_3",
+      "total_turns": 51,
+      "Player_1_DECEPTION_final_cards": 21,
+      "Player_2_final_cards": 12,
+      "Player_3_final_cards": 0,
+      "Player_4_final_cards": 8
+    },
+    {
+      "round_id": 4,
+      "success": true,
+      "winner": "Player_4",
+      "total_turns": 68,
+      "Player_1_DECEPTION_final_cards": 23,
+      "Player_2_final_cards": 25,
+      "Player_3_final_cards": 3,
+      "Player_4_final_cards": 0
+    },
+    {
+      "round_id": 5,
+      "success": true,
+      "winner": "Player_4",
+      "total_turns": 48,
+      "Player_1_DECEPTION_final_cards": 18,
+      "Player_2_final_cards": 22,
+      "Player_3_final_cards": 12,
+      "Player_4_final_cards": 0
+    }
+  ]
+}

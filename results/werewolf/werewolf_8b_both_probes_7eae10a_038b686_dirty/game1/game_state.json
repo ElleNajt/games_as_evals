@@ -1,0 +1,45 @@
+{
+  "players": [
+    {
+      "name": "Player1",
+      "role": "villager",
+      "alive": true
+    },
+    {
+      "name": "Player2",
+      "role": "werewolf",
+      "alive": true
+    },
+    {
+      "name": "Player3",
+      "role": "werewolf",
+      "alive": true
+    },
+    {
+      "name": "Player4",
+      "role": "seer",
+      "alive": false
+    },
+    {
+      "name": "Player5",
+      "role": "villager",
+      "alive": true
+    }
+  ],
+  "phase": "game_over",
+  "turn_number": 1,
+  "history": [
+    {
+      "turn": 1,
+      "phase": "night",
+      "type": "night_kill",
+      "data": {
+        "victim": "Player4",
+        "werewolf_votes": {
+          "Player2": "Player4",
+          "Player3": "Player4"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "output_dir": "./results",
+  "players": [],
+  "git_hash": "0755d5b",
+  "config_hash": "9ae6b84",
+  "is_dirty": true,
+  "player_template": null,
+  "num_players": 4,
+  "num_decks": 1,
+  "max_turns": 200,
+  "provide_probe_scores": false
+}

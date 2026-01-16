@@ -1,0 +1,14 @@
+=== WEREWOLF GAME 1 STARTED ===
+Backends: modal
+=== WEREWOLF GAME 1 STARTED ===
+Backends: modal
+Lie detector: ENABLED
+Players: ['Player1', 'Player2', 'Player3', 'Player4', 'Player5']
+
+Role assignments (secret):
+  Player1: werewolf
+  Player2: villager
+  Player3: werewolf
+  Player4: villager
+  Player5: villager
+

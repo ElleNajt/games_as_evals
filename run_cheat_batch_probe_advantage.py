@@ -79,7 +79,7 @@ Play intelligently and adapt your strategy.""",
     )
 
     # Override player 0 to be probe-assisted
-    config.player_configs[0] = probe_assisted
+    config.players[0] = probe_assisted
 
     return config
 

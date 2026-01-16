@@ -1,0 +1,11 @@
+{
+  "winner": null,
+  "total_turns": 50,
+  "reason": "max_turns",
+  "final_hands": {
+    "Player_1": 22,
+    "Player_2": 13,
+    "Player_3": 17
+  },
+  "results_dir": "results/cheat/cheat_omniscient_probes_0755d5b_1a59982_dirty"
+}

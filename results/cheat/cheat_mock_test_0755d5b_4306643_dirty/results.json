@@ -1,0 +1,11 @@
+{
+  "winner": null,
+  "total_turns": 20,
+  "reason": "max_turns",
+  "final_hands": {
+    "Player_1": 15,
+    "Player_2": 12,
+    "Player_3": 25
+  },
+  "results_dir": "results/cheat/cheat_mock_test_0755d5b_4306643_dirty"
+}

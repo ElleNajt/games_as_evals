@@ -1,0 +1,2 @@
+{"timestamp": "2025-12-24T09:17:50.877392", "event_type": "game_start", "data": {"num_players": 4, "num_decks": 1, "initial_hands": {"Player_1": 13, "Player_2": 13, "Player_3": 13, "Player_4": 13}}}
+{"timestamp": "2025-12-24T09:18:54.510762", "event_type": "card_play", "data": {"turn": 0, "player": "Player_1", "claimed_rank": "Ace", "claimed_count": 1, "actual_cards": ["Ace\u2665"], "was_honest": true, "pile_size_after": 1}}

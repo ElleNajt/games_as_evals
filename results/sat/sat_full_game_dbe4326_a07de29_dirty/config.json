@@ -1,0 +1,53 @@
+{
+  "output_dir": "./results",
+  "players": [
+    {
+      "name": "Player_1",
+      "backend_type": "openrouter",
+      "model": "anthropic/claude-3.5-sonnet",
+      "probes": null,
+      "temperature": 0.7,
+      "max_tokens": 512,
+      "system_prompt": "",
+      "can_see_probes": false,
+      "omniscient_view": false
+    },
+    {
+      "name": "Player_2",
+      "backend_type": "openrouter",
+      "model": "anthropic/claude-3.5-sonnet",
+      "probes": null,
+      "temperature": 0.7,
+      "max_tokens": 512,
+      "system_prompt": "",
+      "can_see_probes": false,
+      "omniscient_view": false
+    }
+  ],
+  "git_hash": "dbe4326",
+  "config_hash": "a07de29",
+  "is_dirty": true,
+  "player_template": {
+    "name": "",
+    "backend_type": "openrouter",
+    "model": "anthropic/claude-3.5-sonnet",
+    "probes": null,
+    "temperature": 0.7,
+    "max_tokens": 512,
+    "system_prompt": "",
+    "can_see_probes": false,
+    "omniscient_view": false
+  },
+  "num_players": 2,
+  "num_variables": 6,
+  "num_clauses": 8,
+  "literals_per_clause": 3,
+  "competitive_mode": false,
+  "two_winners_mode": false,
+  "encourage_deception": false,
+  "symmetric": false,
+  "objective": "MAX",
+  "enable_negotiation": true,
+  "num_negotiation_rounds": 2,
+  "max_turns": 10
+}

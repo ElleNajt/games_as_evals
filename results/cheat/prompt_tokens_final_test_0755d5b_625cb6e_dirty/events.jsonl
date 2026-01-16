@@ -1,0 +1,3 @@
+{"timestamp": "2025-11-29T05:16:09.041836", "event_type": "game_start", "data": {"num_players": 2, "num_decks": 1, "initial_hands": {"P1": 26, "P2": 26}}}
+{"timestamp": "2025-11-29T05:16:58.864262", "event_type": "card_play", "data": {"turn": 0, "player": "P1", "claimed_rank": "Ace", "claimed_count": 4, "actual_cards": ["Ace\u2663", "Five\u2660", "Six\u2666", "Ace\u2666"], "was_honest": false, "pile_size_after": 4}}
+{"timestamp": "2025-11-29T05:16:59.175905", "event_type": "game_end", "data": {"winner": null, "total_turns": 1, "reason": "max_turns", "final_hands": {"P1": 22, "P2": 26}, "results_dir": "results/cheat/prompt_tokens_final_test_0755d5b_625cb6e_dirty"}}

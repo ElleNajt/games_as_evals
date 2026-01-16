@@ -1,0 +1,87 @@
+{
+  "output_dir": "./results",
+  "players": [
+    {
+      "name": "Player_1",
+      "backend_type": "modal",
+      "model": "meta-llama/Llama-3.1-70B-Instruct",
+      "probes": [
+        "hallucination_70b"
+      ],
+      "temperature": 1.0,
+      "max_tokens": 150,
+      "system_prompt": "",
+      "can_see_probes": true,
+      "omniscient_view": false
+    },
+    {
+      "name": "Player_2",
+      "backend_type": "modal",
+      "model": "meta-llama/Llama-3.1-70B-Instruct",
+      "probes": [
+        "hallucination_70b"
+      ],
+      "temperature": 1.0,
+      "max_tokens": 150,
+      "system_prompt": "",
+      "can_see_probes": true,
+      "omniscient_view": false
+    },
+    {
+      "name": "Player_3",
+      "backend_type": "modal",
+      "model": "meta-llama/Llama-3.1-70B-Instruct",
+      "probes": [
+        "hallucination_70b"
+      ],
+      "temperature": 1.0,
+      "max_tokens": 150,
+      "system_prompt": "",
+      "can_see_probes": true,
+      "omniscient_view": false
+    },
+    {
+      "name": "Player_4",
+      "backend_type": "modal",
+      "model": "meta-llama/Llama-3.1-70B-Instruct",
+      "probes": [
+        "hallucination_70b"
+      ],
+      "temperature": 1.0,
+      "max_tokens": 150,
+      "system_prompt": "",
+      "can_see_probes": true,
+      "omniscient_view": false
+    }
+  ],
+  "git_hash": "ca856c7",
+  "config_hash": "4179494",
+  "is_dirty": true,
+  "player_template": {
+    "name": "",
+    "backend_type": "modal",
+    "model": "meta-llama/Llama-3.1-70B-Instruct",
+    "probes": [
+      "hallucination_70b"
+    ],
+    "temperature": 1.0,
+    "max_tokens": 150,
+    "system_prompt": "",
+    "can_see_probes": true,
+    "omniscient_view": false
+  },
+  "num_players": 4,
+  "num_decks": 1,
+  "max_turns": 200,
+  "provide_probe_scores": true,
+  "probe_thresholds": {
+    "hallucination_70b": {
+      "low": 0.12,
+      "high": 0.15
+    }
+  },
+  "probe_scaffolding": "strong",
+  "probe_accuracy_stats": {
+    "hallucination_70b": 0.98
+  }
+}

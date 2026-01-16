@@ -1,0 +1,12 @@
+{
+  "winner": "Player_2",
+  "total_turns": 18,
+  "reason": "player_won",
+  "final_hands": {
+    "Player_1": 12,
+    "Player_2": 0,
+    "Player_3": 20,
+    "Player_4": 18
+  },
+  "results_dir": "results/cheat/cheat_test_6011bb3_64877d3_dirty"
+}

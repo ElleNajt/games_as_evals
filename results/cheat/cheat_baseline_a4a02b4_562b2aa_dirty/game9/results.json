@@ -1,0 +1,12 @@
+{
+  "winner": "Player_3",
+  "total_turns": 39,
+  "reason": "player_won",
+  "final_hands": {
+    "Player_1": 23,
+    "Player_2": 23,
+    "Player_3": 0,
+    "Player_4": 1
+  },
+  "results_dir": "results/cheat/cheat_baseline_a4a02b4_562b2aa_dirty/game9"
+}

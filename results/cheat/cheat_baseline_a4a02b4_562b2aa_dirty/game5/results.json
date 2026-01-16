@@ -1,0 +1,12 @@
+{
+  "winner": "Player_1",
+  "total_turns": 45,
+  "reason": "player_won",
+  "final_hands": {
+    "Player_1": 0,
+    "Player_2": 39,
+    "Player_3": 5,
+    "Player_4": 8
+  },
+  "results_dir": "results/cheat/cheat_baseline_a4a02b4_562b2aa_dirty/game5"
+}

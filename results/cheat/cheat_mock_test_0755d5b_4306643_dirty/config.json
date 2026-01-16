@@ -1,0 +1,56 @@
+{
+  "output_dir": "./results",
+  "players": [
+    {
+      "name": "Player_1",
+      "backend_type": "mock",
+      "model": "mock-model",
+      "probes": null,
+      "temperature": 0.7,
+      "max_tokens": 512,
+      "system_prompt": "You are playing Cheat.",
+      "can_see_probes": false,
+      "omniscient_view": false
+    },
+    {
+      "name": "Player_2",
+      "backend_type": "mock",
+      "model": "mock-model",
+      "probes": null,
+      "temperature": 0.7,
+      "max_tokens": 512,
+      "system_prompt": "You are playing Cheat.",
+      "can_see_probes": false,
+      "omniscient_view": false
+    },
+    {
+      "name": "Player_3",
+      "backend_type": "mock",
+      "model": "mock-model",
+      "probes": null,
+      "temperature": 0.7,
+      "max_tokens": 512,
+      "system_prompt": "You are playing Cheat.",
+      "can_see_probes": false,
+      "omniscient_view": false
+    }
+  ],
+  "git_hash": "0755d5b",
+  "config_hash": "4306643",
+  "is_dirty": true,
+  "player_template": {
+    "name": "template",
+    "backend_type": "mock",
+    "model": "mock-model",
+    "probes": null,
+    "temperature": 0.7,
+    "max_tokens": 512,
+    "system_prompt": "You are playing Cheat.",
+    "can_see_probes": false,
+    "omniscient_view": false
+  },
+  "num_players": 3,
+  "num_decks": 1,
+  "max_turns": 20,
+  "provide_probe_scores": true
+}

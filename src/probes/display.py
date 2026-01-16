@@ -82,10 +82,10 @@ def format_probe_annotation(
         return text
 
     if style == "inline":
-        # 3-SAT style: Annotate each sentence
+        # 3-SAT style: Annotate each sentence with numerical score
         import re
 
-        label = categorize_score(probe_scores.aggregate_score, all_scores)
+        score = probe_scores.aggregate_score
 
         # Split on sentence boundaries but keep the punctuation
         # Matches: . ? ! ; followed by space or end of string
@@ -103,12 +103,12 @@ def format_probe_annotation(
             # Check if next element is punctuation
             if i + 1 < len(sentences) and sentences[i + 1] in ".?!;":
                 punct = sentences[i + 1]
-                # Add sentence with annotation before punctuation
-                result.append(f"{sentence} [PROBE: {label}]{punct}")
+                # Add sentence with annotation before punctuation showing numerical score
+                result.append(f"{sentence} [PROBE: {score:.2f}]{punct}")
                 i += 2
             else:
                 # No punctuation following (shouldn't happen with our regex, but handle it)
-                result.append(f"{sentence} [PROBE: {label}]")
+                result.append(f"{sentence} [PROBE: {score:.2f}]")
                 i += 1
 
         return " ".join(result)

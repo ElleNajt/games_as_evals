@@ -1,0 +1,12 @@
+{
+  "winner": "Player_3",
+  "total_turns": 43,
+  "reason": "player_won",
+  "final_hands": {
+    "Player_1": 36,
+    "Player_2": 5,
+    "Player_3": 0,
+    "Player_4": 10
+  },
+  "results_dir": "results/cheat/cheat_deception_a4a02b4_4d2eb15_dirty/game9"
+}

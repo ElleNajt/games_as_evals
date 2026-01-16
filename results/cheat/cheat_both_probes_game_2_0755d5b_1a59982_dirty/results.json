@@ -1,0 +1,11 @@
+{
+  "winner": null,
+  "total_turns": 50,
+  "reason": "max_turns",
+  "final_hands": {
+    "Player_1": 18,
+    "Player_2": 19,
+    "Player_3": 15
+  },
+  "results_dir": "results/cheat/cheat_both_probes_game_2_0755d5b_1a59982_dirty"
+}

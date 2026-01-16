@@ -1,0 +1,39 @@
+{
+  "output_dir": "./results",
+  "players": [
+    {
+      "name": "P1",
+      "backend_type": "modal",
+      "model": "meta-llama/Llama-3.1-8B-Instruct",
+      "probes": [
+        "deception_8b"
+      ],
+      "temperature": 0.7,
+      "max_tokens": 512,
+      "system_prompt": "",
+      "can_see_probes": false,
+      "omniscient_view": false
+    },
+    {
+      "name": "P2",
+      "backend_type": "modal",
+      "model": "meta-llama/Llama-3.1-8B-Instruct",
+      "probes": [
+        "deception_8b"
+      ],
+      "temperature": 0.7,
+      "max_tokens": 512,
+      "system_prompt": "",
+      "can_see_probes": false,
+      "omniscient_view": false
+    }
+  ],
+  "git_hash": "0755d5b",
+  "config_hash": "625cb6e",
+  "is_dirty": true,
+  "player_template": null,
+  "num_players": 2,
+  "num_decks": 1,
+  "max_turns": 1,
+  "provide_probe_scores": false
+}

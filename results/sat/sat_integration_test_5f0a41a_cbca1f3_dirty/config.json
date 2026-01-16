@@ -1,0 +1,53 @@
+{
+  "output_dir": "./results",
+  "players": [
+    {
+      "name": "Player_1",
+      "backend_type": "modal",
+      "model": "meta-llama/Llama-3.1-8B-Instruct",
+      "probes": [],
+      "temperature": 0.7,
+      "max_tokens": 512,
+      "system_prompt": "",
+      "can_see_probes": false,
+      "omniscient_view": false
+    },
+    {
+      "name": "Player_2",
+      "backend_type": "modal",
+      "model": "meta-llama/Llama-3.1-8B-Instruct",
+      "probes": [],
+      "temperature": 0.7,
+      "max_tokens": 512,
+      "system_prompt": "",
+      "can_see_probes": false,
+      "omniscient_view": false
+    }
+  ],
+  "git_hash": "5f0a41a",
+  "config_hash": "cbca1f3",
+  "is_dirty": true,
+  "player_template": {
+    "name": "",
+    "backend_type": "modal",
+    "model": "meta-llama/Llama-3.1-8B-Instruct",
+    "probes": [],
+    "temperature": 0.7,
+    "max_tokens": 512,
+    "system_prompt": "",
+    "can_see_probes": false,
+    "omniscient_view": false
+  },
+  "num_players": 2,
+  "num_variables": 8,
+  "num_clauses": 16,
+  "literals_per_clause": 3,
+  "competitive_mode": false,
+  "two_winners_mode": false,
+  "encourage_deception": false,
+  "symmetric": false,
+  "objective": "MAX",
+  "enable_negotiation": true,
+  "num_negotiation_rounds": 3,
+  "max_turns": 100
+}

@@ -1,0 +1,55 @@
+{
+  "output_dir": "./results",
+  "players": [
+    {
+      "name": "Player_1",
+      "backend_type": "mock",
+      "model": "test-model",
+      "probes": null,
+      "temperature": 0.7,
+      "max_tokens": 512,
+      "system_prompt": "",
+      "can_see_probes": false,
+      "omniscient_view": false
+    },
+    {
+      "name": "Player_2",
+      "backend_type": "mock",
+      "model": "test-model",
+      "probes": null,
+      "temperature": 0.7,
+      "max_tokens": 512,
+      "system_prompt": "",
+      "can_see_probes": false,
+      "omniscient_view": false
+    }
+  ],
+  "git_hash": "859dbfe",
+  "config_hash": "670215a",
+  "is_dirty": true,
+  "player_template": {
+    "name": "",
+    "backend_type": "mock",
+    "model": "test-model",
+    "probes": null,
+    "temperature": 0.7,
+    "max_tokens": 512,
+    "system_prompt": "",
+    "can_see_probes": false,
+    "omniscient_view": false
+  },
+  "num_players": 2,
+  "num_variables": 6,
+  "num_clauses": 8,
+  "literals_per_clause": 3,
+  "competitive_mode": false,
+  "two_winners_mode": false,
+  "symmetric": false,
+  "competitiveness_instruction": "You are playing a COMPETITIVE 3-SAT game. Your goal is to satisfy as many of YOUR clauses as possible to WIN the game.",
+  "objective": "MAX",
+  "enable_negotiation": true,
+  "num_negotiation_rounds": 3,
+  "max_turns": null,
+  "show_probe_scores": false,
+  "probe_thresholds": null
+}

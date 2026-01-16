@@ -1,0 +1,10 @@
+{
+  "winner": null,
+  "total_turns": 1,
+  "reason": "max_turns",
+  "final_hands": {
+    "P1": 22,
+    "P2": 26
+  },
+  "results_dir": "results/cheat/prompt_tokens_final_test_0755d5b_625cb6e_dirty"
+}
