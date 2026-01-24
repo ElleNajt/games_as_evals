@@ -32,12 +32,12 @@ def extract_activations_from_text(
     layer: int,
     batch_size: int = 8,
     device: str = "cuda",
-    verbose: bool = True
+    verbose: bool = True,
+    use_all_tokens: bool = True,
+    exclude_last_n_tokens: int = 0
 ) -> Float[Tensor, "n_examples hidden_dim"]:
     """Extract activations from a list of texts at a specific layer.
-    
-    Extracts the last token activation for each text.
-    
+
     Args:
         model: HuggingFace model
         tokenizer: HuggingFace tokenizer
@@ -46,13 +46,18 @@ def extract_activations_from_text(
         batch_size: Batch size for processing
         device: Device to run on
         verbose: Show progress bar
-        
+        use_all_tokens: If True, returns mean of all token activations (Apollo's approach).
+                       If False, returns only the last token activation.
+        exclude_last_n_tokens: Number of tokens to exclude from the end (for REPE dataset).
+                              Only used when use_all_tokens=True.
+
     Returns:
         Tensor of activations [n_examples, hidden_dim]
     """
     model.eval()
-    model.to(device)
-    
+    # Don't call model.to(device) when using device_map="auto"
+    # The model is already placed correctly by accelerate
+
     all_activations = []
     
     for i in trange(0, len(texts), batch_size, disable=not verbose, desc="Extracting activations"):
@@ -79,20 +84,44 @@ def extract_activations_from_text(
                 use_cache=False
             )
         
-        # Extract activations from specified layer at last token position
+        # Extract activations from specified layer
         # hidden_states is a tuple of (n_layers+1) tensors
         # Each tensor is [batch, seq_len, hidden_dim]
         layer_activations = outputs.hidden_states[layer]  # [batch, seq_len, hidden_dim]
-        
-        # Get last token position for each sequence (accounting for padding)
-        last_token_positions = attention_mask.sum(dim=1) - 1  # [batch]
-        
-        # Extract last token activations
-        batch_acts = []
-        for j, pos in enumerate(last_token_positions):
-            batch_acts.append(layer_activations[j, pos, :])
-        
-        all_activations.append(torch.stack(batch_acts).cpu())
+
+        if use_all_tokens:
+            # Apollo's approach: Take mean of all non-padded tokens
+            # Create mask for real tokens (non-padding)
+            mask = attention_mask.clone().unsqueeze(-1)  # [batch, seq_len, 1]
+
+            # Exclude last N tokens if specified (for REPE dataset)
+            if exclude_last_n_tokens > 0:
+                # Find the position of the last real token for each sequence
+                seq_lengths = attention_mask.sum(dim=1)  # [batch]
+                for j in range(len(seq_lengths)):
+                    last_pos = seq_lengths[j].item()
+                    # Zero out the last N tokens in the mask
+                    start_exclude = max(0, last_pos - exclude_last_n_tokens)
+                    mask[j, start_exclude:last_pos, :] = 0
+
+            # Mask out padding tokens and excluded tokens, then compute mean
+            masked_activations = layer_activations * mask  # [batch, seq_len, hidden_dim]
+            token_counts = mask.sum(dim=1)  # [batch, hidden_dim]
+            # Avoid division by zero
+            token_counts = torch.clamp(token_counts, min=1.0)
+            mean_activations = masked_activations.sum(dim=1) / token_counts  # [batch, hidden_dim]
+
+            all_activations.append(mean_activations.cpu())
+        else:
+            # Original approach: Get last token position for each sequence (accounting for padding)
+            last_token_positions = attention_mask.sum(dim=1) - 1  # [batch]
+
+            # Extract last token activations
+            batch_acts = []
+            for j, pos in enumerate(last_token_positions):
+                batch_acts.append(layer_activations[j, pos, :])
+
+            all_activations.append(torch.stack(batch_acts).cpu())
     
     return torch.cat(all_activations, dim=0)
 
@@ -104,10 +133,12 @@ def extract_contrastive_activations(
     layer: int,
     batch_size: int = 8,
     device: str = "cuda",
-    verbose: bool = True
+    verbose: bool = True,
+    use_all_tokens: bool = True,
+    exclude_last_n_tokens: int = 0
 ) -> ActivationData:
     """Extract activations for contrastive pairs.
-    
+
     Args:
         model: HuggingFace model
         tokenizer: HuggingFace tokenizer
@@ -116,7 +147,10 @@ def extract_contrastive_activations(
         batch_size: Batch size for processing
         device: Device to run on
         verbose: Show progress bar
-        
+        use_all_tokens: If True, uses mean of all tokens (Apollo's approach).
+                       If False, uses only last token.
+        exclude_last_n_tokens: Number of tokens to exclude from the end (for REPE dataset).
+
     Returns:
         ActivationData with positive and negative activations
     """
@@ -127,10 +161,12 @@ def extract_contrastive_activations(
         print(f"Extracting activations for {len(dataset_pairs)} pairs at layer {layer}")
     
     positive_acts = extract_activations_from_text(
-        model, tokenizer, positive_texts, layer, batch_size, device, verbose
+        model, tokenizer, positive_texts, layer, batch_size, device, verbose,
+        use_all_tokens, exclude_last_n_tokens
     )
     negative_acts = extract_activations_from_text(
-        model, tokenizer, negative_texts, layer, batch_size, device, verbose
+        model, tokenizer, negative_texts, layer, batch_size, device, verbose,
+        use_all_tokens, exclude_last_n_tokens
     )
     
     return ActivationData(

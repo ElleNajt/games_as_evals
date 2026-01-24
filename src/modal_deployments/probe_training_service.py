@@ -632,6 +632,290 @@ def upload_dataset_files(dataset_name: str, files_data: Dict[str, str]):
     print(f"  ✓ Dataset uploaded to: {volume_dataset_path}")
 
 
+@app.function(
+    gpu=GPU_CONFIG_8B,
+    timeout=TIMEOUT * 3,  # 3 hours for layer sweep
+    secrets=[HF_SECRET],
+    volumes={VOLUME_PATH: VOLUME},
+)
+def sweep_layers_on_modal(
+    dataset_name: str,
+    model_name: str,
+    method: str,
+    layers: Optional[List[int]] = None,
+    learning_rate: float = 1e-3,
+    num_epochs: int = 100,
+    batch_size: int = 8,
+    seed: int = 42,
+) -> Dict[str, Any]:
+    """Sweep across layers to find best probe using AUROC.
+
+    Args:
+        dataset_name: Name of dataset (e.g., "roleplaying")
+        model_name: HuggingFace model name
+        method: Training method
+        layers: List of layers to test (None = all layers)
+        learning_rate: Learning rate for gradient-based methods
+        num_epochs: Number of training epochs
+        batch_size: Batch size for activation extraction
+        seed: Random seed
+
+    Returns:
+        Dict with best layer, metrics, and all results
+    """
+    import json
+    from pathlib import Path
+    import torch
+    import torch.nn as nn
+    import torch.optim as optim
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from dataclasses import dataclass
+    from typing import List, Optional, Dict
+    import numpy as np
+    from sklearn.metrics import roc_auc_score
+
+    # Inline data structures
+    @dataclass
+    class ContrastivePair:
+        positive: str
+        negative: str
+        metadata: Optional[Dict] = None
+
+    @dataclass
+    class ActivationData:
+        positive_acts: torch.Tensor
+        negative_acts: torch.Tensor
+
+    # Inline helper functions (copy from train_probe_on_modal)
+    def load_model_and_tokenizer(model_name: str, device: str = "cuda"):
+        print(f"Loading model: {model_name}")
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            torch_dtype=torch.bfloat16,
+            device_map=device,
+            trust_remote_code=True,
+        )
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+        model.eval()
+        return model, tokenizer
+
+    def extract_activations_from_text(model, tokenizer, texts, layer, batch_size=8, device="cuda"):
+        all_activations = []
+        for i in range(0, len(texts), batch_size):
+            batch_texts = texts[i:i + batch_size]
+            inputs = tokenizer(batch_texts, return_tensors="pt", padding=True, truncation=True, max_length=512).to(device)
+            with torch.no_grad():
+                outputs = model(**inputs, output_hidden_states=True)
+                hidden_states = outputs.hidden_states[layer]
+                last_token_acts = hidden_states[:, -1, :]
+                all_activations.append(last_token_acts.cpu())
+        return torch.cat(all_activations, dim=0)
+
+    def extract_contrastive_activations(model, tokenizer, dataset_pairs, layer, batch_size=8, device="cuda"):
+        positive_texts = [pair.positive for pair in dataset_pairs]
+        negative_texts = [pair.negative for pair in dataset_pairs]
+        pos_acts = extract_activations_from_text(model, tokenizer, positive_texts, layer, batch_size, device)
+        neg_acts = extract_activations_from_text(model, tokenizer, negative_texts, layer, batch_size, device)
+        return ActivationData(positive_acts=pos_acts, negative_acts=neg_acts)
+
+    def train_linear_contrastive(activation_data, learning_rate, num_epochs):
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        pos_acts = activation_data.positive_acts.to(device).to(torch.float32)
+        neg_acts = activation_data.negative_acts.to(device).to(torch.float32)
+        hidden_dim = pos_acts.shape[1]
+
+        direction = nn.Parameter(torch.randn(hidden_dim, device=device, dtype=torch.float32))
+        optimizer = optim.Adam([direction], lr=learning_rate)
+
+        best_loss = float("inf")
+        best_direction = None
+
+        for epoch in range(num_epochs):
+            optimizer.zero_grad()
+            norm_direction = direction / (direction.norm() + 1e-8)
+            pos_scores = pos_acts @ norm_direction
+            neg_scores = neg_acts @ norm_direction
+            loss = -pos_scores.mean() + neg_scores.mean()
+            loss.backward()
+            optimizer.step()
+
+            if loss.item() < best_loss:
+                best_loss = loss.item()
+                best_direction = norm_direction.detach().clone()
+
+        with torch.no_grad():
+            final_direction = best_direction / (best_direction.norm() + 1e-8)
+            pos_scores = pos_acts @ final_direction
+            neg_scores = neg_acts @ final_direction
+            correct = (pos_scores > 0).sum() + (neg_scores < 0).sum()
+            total = len(pos_scores) + len(neg_scores)
+            accuracy = (correct.float() / total).item()
+
+        metrics = {
+            "accuracy": accuracy,
+            "separation": (pos_scores.mean() - neg_scores.mean()).item(),
+        }
+        return final_direction.cpu(), metrics
+
+    def calculate_auroc(probe_weights, positive_acts, negative_acts):
+        with torch.no_grad():
+            # Ensure all tensors have the same dtype (convert to float32)
+            probe_weights = probe_weights.float()
+            positive_acts = positive_acts.float()
+            negative_acts = negative_acts.float()
+            pos_scores = (positive_acts @ probe_weights).cpu().numpy()
+            neg_scores = (negative_acts @ probe_weights).cpu().numpy()
+        y_true = np.array([1] * len(neg_scores) + [0] * len(pos_scores))
+        y_scores = np.concatenate([neg_scores, pos_scores])
+        return float(roc_auc_score(y_true, y_scores))
+
+    # Main sweep logic
+    print("=" * 70)
+    print("Modal Layer Sweep for Probe Training")
+    print("=" * 70)
+    print(f"Dataset: {dataset_name}")
+    print(f"Model: {model_name}")
+    print(f"Method: {method}")
+    print("=" * 70)
+
+    # Load dataset
+    dataset_path = Path(VOLUME_PATH) / "datasets" / dataset_name
+    train_file = dataset_path / "train.jsonl"
+    val_file = dataset_path / "val.jsonl"
+
+    train_data = []
+    with open(train_file, "r") as f:
+        for line in f:
+            data = json.loads(line)
+            train_data.append(ContrastivePair(positive=data["positive"], negative=data["negative"]))
+
+    val_data = []
+    with open(val_file, "r") as f:
+        for line in f:
+            data = json.loads(line)
+            val_data.append(ContrastivePair(positive=data["positive"], negative=data["negative"]))
+
+    print(f"Loaded {len(train_data)} train, {len(val_data)} val examples")
+
+    # Load model once
+    model, tokenizer = load_model_and_tokenizer(model_name, device="cuda")
+
+    # Determine layers to sweep
+    if layers is None:
+        num_layers = model.config.num_hidden_layers
+        layers = list(range(num_layers))
+
+    print(f"Sweeping layers: {layers}")
+    print()
+
+    # Sweep layers
+    results = []
+    all_probes = {}
+
+    for layer in layers:
+        print(f"Layer {layer}:")
+
+        # Extract activations
+        print("  Extracting training activations...")
+        train_acts = extract_contrastive_activations(model, tokenizer, train_data, layer, batch_size, "cuda")
+
+        # Train probe
+        print(f"  Training with {method}...")
+        if method == "linear-contrastive":
+            probe_weights, train_metrics = train_linear_contrastive(train_acts, learning_rate, num_epochs)
+        else:
+            raise ValueError(f"Method {method} not yet supported in sweep")
+
+        # Evaluate on validation
+        print("  Evaluating on validation...")
+        val_acts = extract_contrastive_activations(model, tokenizer, val_data, layer, batch_size, "cuda")
+
+        val_auroc = calculate_auroc(probe_weights, val_acts.positive_acts, val_acts.negative_acts)
+
+        with torch.no_grad():
+            # Ensure consistent dtype (convert to float32)
+            probe_weights_f32 = probe_weights.float()
+            pos_acts_f32 = val_acts.positive_acts.float()
+            neg_acts_f32 = val_acts.negative_acts.float()
+
+            pos_scores = pos_acts_f32 @ probe_weights_f32
+            neg_scores = neg_acts_f32 @ probe_weights_f32
+            correct = (pos_scores > 0).sum() + (neg_scores < 0).sum()
+            total = len(pos_scores) + len(neg_scores)
+            val_accuracy = (correct.float() / total).item()
+
+        metrics = {
+            'layer': layer,
+            'train_accuracy': train_metrics['accuracy'],
+            'train_separation': train_metrics['separation'],
+            'val_accuracy': val_accuracy,
+            'val_auroc': val_auroc,
+        }
+
+        print(f"  Train acc: {metrics['train_accuracy']:.4f}, Val AUROC: {val_auroc:.4f}")
+        print()
+
+        results.append(metrics)
+        all_probes[layer] = probe_weights
+
+    # Find best layer by AUROC
+    results_sorted = sorted(results, key=lambda x: x['val_auroc'], reverse=True)
+    best_result = results_sorted[0]
+    best_layer = best_result['layer']
+    best_probe = all_probes[best_layer]
+
+    print("=" * 70)
+    print("SWEEP COMPLETE!")
+    print(f"Best layer: {best_layer} (AUROC: {best_result['val_auroc']:.4f})")
+    print("=" * 70)
+
+    # Save best probe
+    probe_name = f"{dataset_name}_{model_name.split('/')[-1]}_{method}_layer{best_layer}"
+    probe_dir = Path(VOLUME_PATH) / "models" / "probes" / probe_name
+    probe_dir.mkdir(parents=True, exist_ok=True)
+
+    probe_state_dict = {
+        "weight": best_probe.unsqueeze(0),
+        "bias": torch.zeros(1),
+    }
+    torch.save(probe_state_dict, probe_dir / "probe_head.bin")
+
+    probe_config_data = {
+        "hidden_size": 4096,
+        "layer_idx": best_layer,
+        "probe_type": f"{method}_probe",
+        "source_model": model_name,
+        "source_dataset": dataset_name,
+    }
+    with open(probe_dir / "probe_config.json", "w") as f:
+        json.dump(probe_config_data, f, indent=2)
+
+    sweep_metadata = {
+        "dataset": dataset_name,
+        "model": model_name,
+        "method": method,
+        "layers_tested": layers,
+        "best_layer": best_layer,
+        "best_metrics": best_result,
+        "all_results": results,
+    }
+    with open(probe_dir / "layer_sweep_results.json", "w") as f:
+        json.dump(sweep_metadata, f, indent=2)
+
+    VOLUME.commit()
+    print(f"Saved best probe to: {probe_dir}")
+
+    return {
+        "best_layer": best_layer,
+        "best_probe_name": probe_name,
+        "best_metrics": best_result,
+        "all_results": results,
+        "volume_path": str(probe_dir),
+    }
+
+
 @app.local_entrypoint()
 def main(
     action: str = "train",
@@ -639,15 +923,17 @@ def main(
     model: str = "meta-llama/Meta-Llama-3.1-8B-Instruct",
     method: str = "massmean",
     layer: int = 12,
+    layers: str = "",
 ):
     """CLI entrypoint for probe training service.
 
     Args:
-        action: Action to perform ('train' or 'upload')
+        action: Action to perform ('train', 'sweep', or 'upload')
         dataset: Dataset name
         model: Model name (for training)
         method: Training method (for training)
         layer: Layer number (for training)
+        layers: Comma-separated layers for sweep (e.g., "8,10,12")
     """
     if action == "upload":
         # Upload dataset to volume
@@ -693,5 +979,36 @@ def main(
             print(f"Val Metrics: {result['val_metrics']}")
         print(f"Volume path: {result['volume_path']}")
 
+    elif action == "sweep":
+        # Layer sweep
+        print("Starting layer sweep on Modal...")
+        print()
+
+        # Parse layers
+        layer_list = None
+        if layers:
+            layer_list = [int(l.strip()) for l in layers.split(",")]
+
+        result = sweep_layers_on_modal.remote(
+            dataset_name=dataset,
+            model_name=model,
+            method=method,
+            layers=layer_list,
+        )
+
+        print()
+        print("=" * 70)
+        print("Layer sweep completed successfully!")
+        print("=" * 70)
+        print(f"Best layer: {result['best_layer']}")
+        print(f"Best probe: {result['best_probe_name']}")
+        print(f"Best AUROC: {result['best_metrics']['val_auroc']:.4f}")
+        print(f"Volume path: {result['volume_path']}")
+        print()
+        print("All results (sorted by AUROC):")
+        sorted_results = sorted(result['all_results'], key=lambda x: x['val_auroc'], reverse=True)
+        for r in sorted_results[:5]:  # Show top 5
+            print(f"  Layer {r['layer']}: AUROC={r['val_auroc']:.4f}, Acc={r['val_accuracy']:.4f}")
+
     else:
-        print(f"ERROR: Unknown action '{action}'. Use 'train' or 'upload'.")
+        print(f"ERROR: Unknown action '{action}'. Use 'train', 'sweep', or 'upload'.")

@@ -38,18 +38,69 @@ src/probe_training/
 python -m src.probe_training.train \
   --dataset roleplaying \
   --model meta-llama/Meta-Llama-3.1-8B-Instruct \
-  --method ccs \
+  --method linear-contrastive \
   --layer 22 \
+  --local
+
+# Train with L2 regularization (Apollo's approach)
+python -m src.probe_training.train \
+  --dataset roleplaying \
+  --model meta-llama/Meta-Llama-3.1-8B-Instruct \
+  --method linear-contrastive \
+  --layer 22 \
+  --additional-params l2_reg=0.001 \
+  --local
+
+# Train with last token only (legacy approach)
+python -m src.probe_training.train \
+  --dataset roleplaying \
+  --model meta-llama/Meta-Llama-3.1-8B-Instruct \
+  --method linear-contrastive \
+  --layer 22 \
+  --use-all-tokens False \
+  --local
+
+# Train with REPE/instructed pairs approach (exclude last 5 tokens)
+python -m src.probe_training.train \
+  --dataset repe_honesty \
+  --model meta-llama/Meta-Llama-3.1-8B-Instruct \
+  --method lat \
+  --layer 22 \
+  --exclude-last-n-tokens 5 \
   --local
 
 # Train on Modal (production)
 python -m src.probe_training.train \
   --dataset roleplaying \
   --model meta-llama/Meta-Llama-3.1-8B-Instruct \
-  --method ccs \
+  --method linear-contrastive \
   --layer 22 \
+  --additional-params l2_reg=0.001 \
   --upload \
   --hf-repo your-username/probe-repo
+```
+
+#### L2 Regularization for Linear-Contrastive Method
+
+The `linear-contrastive` method now supports L2 regularization to prevent overfitting:
+
+```python
+from src.probe_training import TrainingConfig
+
+config = TrainingConfig(
+    dataset_name="roleplaying",
+    model="meta-llama/Meta-Llama-3.1-8B-Instruct",
+    method="linear-contrastive",
+    layer=22,
+    additional_params={'l2_reg': 0.001}  # L2 regularization strength
+)
+
+# Common L2 values to try:
+# - 0.0: No regularization (default)
+# - 0.0001: Very light regularization
+# - 0.001: Light regularization (Apollo's typical value)
+# - 0.01: Moderate regularization
+# - 0.1: Strong regularization
 ```
 
 ### Loading a Probe
@@ -98,9 +149,68 @@ The full model name is used in the probe name for clarity and to avoid ambiguity
 
 ## Training Methods
 
-- **ccs**: Contrast-Consistent Search (Burns et al.) - unsupervised method
-- **mean_difference**: Difference of means between positive and negative activations
-- **massmean**: Mass-mean direction (default method, fast and effective)
+- **linear-contrastive**: Gradient-based optimization with contrastive loss (supports L2 regularization)
+- **massmean**: Mass-mean direction / Mean-Mean Subtraction (fast and effective)
+- **lda**: Linear Discriminant Analysis (Fisher's Linear Discriminant)
+- **lat**: Linear Artificial Tomography from RepE paper (Apollo Research)
+
+All methods support **activation normalization** (zero mean, unit variance) following Apollo's approach.
+
+## Activation Extraction
+
+By default, probes use **Apollo's approach** of extracting the mean activation across ALL response tokens (not just the last token). This provides a more robust signal by aggregating information from the entire response.
+
+You can control this behavior with the `use_all_tokens` parameter:
+- `use_all_tokens=True` (default): Mean of all token activations
+- `use_all_tokens=False`: Only last token activation (legacy approach)
+
+**Important**: Different datasets use different extraction approaches. See [DATASET_DIFFERENCES.md](DATASET_DIFFERENCES.md) for critical details about:
+- Instructed Pairs (REPE): Excludes last 5 tokens during training
+- Roleplaying: Uses all tokens
+- Evaluation: Always uses all tokens regardless of training approach
+
+## Activation Normalization
+
+Following Apollo Research's approach, activations are normalized to zero mean and unit variance by default:
+
+1. **During Training**: Compute mean and std across all training activations
+2. **Normalization**: `normalized = (activations - mean) / std`
+3. **Saved Parameters**: Mean and std are saved with the probe
+4. **Inference Time**: Same normalization is applied using saved parameters
+
+Control normalization with `additional_params`:
+```python
+# Enable normalization (default)
+config = TrainingConfig(..., additional_params={'normalize': True})
+
+# Disable normalization
+config = TrainingConfig(..., additional_params={'normalize': False})
+```
+
+## Inference with Trained Probes
+
+Use the `ProbeInference` class to apply trained probes with automatic normalization:
+
+```python
+from src.probe_training.inference import ProbeInference
+
+# Load probe (handles normalization automatically)
+probe = ProbeInference("probes/deception_8b_layer12/probe.pt")
+
+# Apply to single activation
+activation = torch.randn(1, 4096)  # [batch, hidden_dim]
+score = probe.apply(activation)  # Returns sigmoid(score)
+logit = probe.apply(activation, return_logits=True)  # Returns raw score
+
+# Apply to sequence with aggregation
+sequence = torch.randn(2, 100, 4096)  # [batch, seq_len, hidden_dim]
+attention_mask = torch.ones(2, 100)
+scores = probe.apply_to_sequence(
+    sequence,
+    attention_mask=attention_mask,
+    aggregation="mean"  # or "max", "last"
+)
+```
 
 ## Integrity Verification
 
