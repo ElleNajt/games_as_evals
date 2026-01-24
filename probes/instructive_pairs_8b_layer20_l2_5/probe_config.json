@@ -1,0 +1,7 @@
+{
+  "hidden_size": 4096,
+  "layer_idx": 20,
+  "probe_type": "linear-contrastive_probe",
+  "source_model": "meta-llama/Meta-Llama-3.1-8B-Instruct",
+  "source_dataset": "repe_honesty_roleplay"
+}

@@ -4,3 +4,7 @@
 # Except this gitignore and README
 !.gitignore
 !README.md
+
+# Allow specific important probes to be committed
+!instructive_pairs_8b_layer20_l2_5/
+!instructive_pairs_8b_layer20_l2_5/**

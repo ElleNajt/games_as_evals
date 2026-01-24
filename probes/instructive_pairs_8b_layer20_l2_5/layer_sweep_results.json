@@ -1,0 +1,79 @@
+{
+  "dataset": "repe_honesty_roleplay",
+  "model": "meta-llama/Meta-Llama-3.1-8B-Instruct",
+  "method": "linear-contrastive",
+  "layers_tested": [
+    20,
+    22,
+    24,
+    26,
+    28,
+    30
+  ],
+  "best_layer": 20,
+  "best_metrics": {
+    "layer": 20,
+    "train_accuracy": 0.3790983259677887,
+    "train_separation": -0.6753059029579163,
+    "val_accuracy": 0.32258063554763794,
+    "val_auroc": 0.7851196670135276,
+    "l2_reg": 5.0,
+    "normalize": true
+  },
+  "all_results": [
+    {
+      "layer": 20,
+      "train_accuracy": 0.3790983259677887,
+      "train_separation": -0.6753059029579163,
+      "val_accuracy": 0.32258063554763794,
+      "val_auroc": 0.7851196670135276,
+      "l2_reg": 5.0,
+      "normalize": true
+    },
+    {
+      "layer": 22,
+      "train_accuracy": 0.28688523173332214,
+      "train_separation": -0.7890086770057678,
+      "val_accuracy": 0.5,
+      "val_auroc": 0.777315296566077,
+      "l2_reg": 5.0,
+      "normalize": true
+    },
+    {
+      "layer": 24,
+      "train_accuracy": 0.6065573692321777,
+      "train_separation": 0.5733835697174072,
+      "val_accuracy": 0.5,
+      "val_auroc": 0.3571800208116545,
+      "l2_reg": 5.0,
+      "normalize": true
+    },
+    {
+      "layer": 26,
+      "train_accuracy": 0.6413934230804443,
+      "train_separation": 0.5738126039505005,
+      "val_accuracy": 0.5,
+      "val_auroc": 0.3537981269510926,
+      "l2_reg": 5.0,
+      "normalize": true
+    },
+    {
+      "layer": 28,
+      "train_accuracy": 0.40778687596321106,
+      "train_separation": -0.4219081401824951,
+      "val_accuracy": 0.5,
+      "val_auroc": 0.49713839750260147,
+      "l2_reg": 5.0,
+      "normalize": true
+    },
+    {
+      "layer": 30,
+      "train_accuracy": 0.3483606278896332,
+      "train_separation": -0.6174480319023132,
+      "val_accuracy": 0.5,
+      "val_auroc": 0.6982310093652445,
+      "l2_reg": 5.0,
+      "normalize": true
+    }
+  ]
+}
