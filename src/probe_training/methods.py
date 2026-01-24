@@ -27,18 +27,41 @@ def train_linear_contrastive(
 
     Args:
         activation_data: Extracted activations for positive and negative examples
-        config: Training configuration
+        config: Training configuration (use additional_params['l2_reg'] for L2 regularization strength)
 
     Returns:
         (probe_weights, metrics) where:
             - probe_weights: Trained linear probe weights [hidden_dim]
-            - metrics: Training metrics (loss, accuracy, etc.)
+            - metrics: Training metrics (loss, accuracy, etc.) including normalization parameters
     """
     device = torch.device(config.device)
     pos_acts = activation_data.positive_acts.to(device).to(torch.float32)
     neg_acts = activation_data.negative_acts.to(device).to(torch.float32)
 
+    # Get normalization setting (default True for Apollo compatibility)
+    normalize = config.additional_params.get('normalize', True)
+
+    # Normalize activations if requested
+    if normalize:
+        # Concatenate all training activations
+        all_acts = torch.cat([pos_acts, neg_acts], dim=0)
+
+        # Compute mean and std for normalization
+        acts_mean = all_acts.mean(dim=0, keepdim=True)
+        acts_std = all_acts.std(dim=0, keepdim=True)
+        acts_std = torch.clamp(acts_std, min=1e-8)  # Prevent division by zero
+
+        # Normalize activations
+        pos_acts = (pos_acts - acts_mean) / acts_std
+        neg_acts = (neg_acts - acts_mean) / acts_std
+    else:
+        acts_mean = None
+        acts_std = None
+
     hidden_dim = pos_acts.shape[1]
+
+    # Get L2 regularization strength from config (default to 0.0 if not specified)
+    l2_reg = config.additional_params.get('l2_reg', 0.0)
 
     # Initialize probe direction
     direction = nn.Parameter(torch.randn(hidden_dim, device=device, dtype=torch.float32))
@@ -58,7 +81,13 @@ def train_linear_contrastive(
         neg_scores = neg_acts @ norm_direction  # [n_neg]
 
         # Contrastive loss: want positive scores high, negative scores low
-        loss = -pos_scores.mean() + neg_scores.mean()
+        contrastive_loss = -pos_scores.mean() + neg_scores.mean()
+
+        # Add L2 regularization penalty (on the unnormalized direction)
+        l2_penalty = l2_reg * (direction.norm() ** 2)
+
+        # Total loss
+        loss = contrastive_loss + l2_penalty
 
         loss.backward()
         optimizer.step()
@@ -83,6 +112,11 @@ def train_linear_contrastive(
         "accuracy": accuracy,
         "mean_pos_score": pos_scores.mean().item(),
         "mean_neg_score": neg_scores.mean().item(),
+        "separation": (pos_scores.mean() - neg_scores.mean()).item(),
+        "l2_reg": l2_reg,  # Include the L2 regularization strength used
+        "normalize": normalize,
+        "normalization_mean": acts_mean.cpu().squeeze() if acts_mean is not None else None,
+        "normalization_std": acts_std.cpu().squeeze() if acts_std is not None else None,
     }
 
     return final_direction.cpu(), metrics
@@ -104,8 +138,28 @@ def train_massmean(
     Returns:
         (probe_weights, metrics)
     """
-    pos_acts = activation_data.positive_acts
-    neg_acts = activation_data.negative_acts
+    pos_acts = activation_data.positive_acts.to(torch.float32)
+    neg_acts = activation_data.negative_acts.to(torch.float32)
+
+    # Get normalization setting (default True for Apollo compatibility)
+    normalize = config.additional_params.get('normalize', True)
+
+    # Normalize activations if requested
+    if normalize:
+        # Concatenate all training activations
+        all_acts = torch.cat([pos_acts, neg_acts], dim=0)
+
+        # Compute mean and std for normalization
+        acts_mean = all_acts.mean(dim=0, keepdim=True)
+        acts_std = all_acts.std(dim=0, keepdim=True)
+        acts_std = torch.clamp(acts_std, min=1e-8)  # Prevent division by zero
+
+        # Normalize activations
+        pos_acts = (pos_acts - acts_mean) / acts_std
+        neg_acts = (neg_acts - acts_mean) / acts_std
+    else:
+        acts_mean = None
+        acts_std = None
 
     # Compute mean activations
     pos_mean = pos_acts.mean(dim=0)  # [hidden_dim]
@@ -132,6 +186,9 @@ def train_massmean(
         "mean_pos_score": pos_scores.mean().item(),
         "mean_neg_score": neg_scores.mean().item(),
         "separation": (pos_scores.mean() - neg_scores.mean()).item(),
+        "normalize": normalize,
+        "normalization_mean": acts_mean.cpu().squeeze() if acts_mean is not None else None,
+        "normalization_std": acts_std.cpu().squeeze() if acts_std is not None else None,
     }
 
     return direction, metrics
@@ -158,6 +215,26 @@ def train_lda(
 
     pos_acts = activation_data.positive_acts.to(device).to(dtype)
     neg_acts = activation_data.negative_acts.to(device).to(dtype)
+
+    # Get normalization setting (default True for Apollo compatibility)
+    normalize = config.additional_params.get('normalize', True)
+
+    # Normalize activations if requested
+    if normalize:
+        # Concatenate all training activations
+        all_acts = torch.cat([pos_acts, neg_acts], dim=0)
+
+        # Compute mean and std for normalization
+        acts_mean = all_acts.mean(dim=0, keepdim=True)
+        acts_std = all_acts.std(dim=0, keepdim=True)
+        acts_std = torch.clamp(acts_std, min=1e-8)  # Prevent division by zero
+
+        # Normalize activations
+        pos_acts = (pos_acts - acts_mean) / acts_std
+        neg_acts = (neg_acts - acts_mean) / acts_std
+    else:
+        acts_mean = None
+        acts_std = None
 
     # Compute mean difference
     pos_mean = pos_acts.mean(dim=0)
@@ -193,6 +270,9 @@ def train_lda(
         "mean_pos_score": pos_scores.mean().item(),
         "mean_neg_score": neg_scores.mean().item(),
         "separation": (pos_scores.mean() - neg_scores.mean()).item(),
+        "normalize": normalize,
+        "normalization_mean": acts_mean.cpu().squeeze() if acts_mean is not None else None,
+        "normalization_std": acts_std.cpu().squeeze() if acts_std is not None else None,
     }
 
     return direction.cpu(), metrics
@@ -219,6 +299,26 @@ def train_lat(
 
     pos_acts = activation_data.positive_acts.to(device).to(dtype)
     neg_acts = activation_data.negative_acts.to(device).to(dtype)
+
+    # Get normalization setting (default True for Apollo compatibility)
+    normalize = config.additional_params.get('normalize', True)
+
+    # Normalize activations if requested
+    if normalize:
+        # Concatenate all training activations
+        all_acts = torch.cat([pos_acts, neg_acts], dim=0)
+
+        # Compute mean and std for normalization
+        acts_mean = all_acts.mean(dim=0, keepdim=True)
+        acts_std = all_acts.std(dim=0, keepdim=True)
+        acts_std = torch.clamp(acts_std, min=1e-8)  # Prevent division by zero
+
+        # Normalize activations
+        pos_acts = (pos_acts - acts_mean) / acts_std
+        neg_acts = (neg_acts - acts_mean) / acts_std
+    else:
+        acts_mean = None
+        acts_std = None
 
     # Compute difference vectors
     diffs = pos_acts - neg_acts  # [n_examples, hidden_dim]
@@ -255,6 +355,9 @@ def train_lat(
         "mean_pos_score": pos_scores.mean().item(),
         "mean_neg_score": neg_scores.mean().item(),
         "separation": (pos_scores.mean() - neg_scores.mean()).item(),
+        "normalize": normalize,
+        "normalization_mean": acts_mean.cpu().squeeze() if acts_mean is not None else None,
+        "normalization_std": acts_std.cpu().squeeze() if acts_std is not None else None,
     }
 
     return direction.cpu(), metrics

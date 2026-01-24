@@ -50,7 +50,7 @@ In Cheat:
 
 ### Deception Probe Failure
 
-The Apollo deception probe was trained on Werewolf roleplaying to detect **intent to mislead**.
+The Apollo deception probe was trained on social deception scenarios (everyday situations like students making excuses, employees covering mistakes) to detect **intent to mislead**.
 
 Why it fails in Cheat:
 - Models play confidently within game rules

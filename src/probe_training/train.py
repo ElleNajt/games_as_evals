@@ -72,7 +72,9 @@ def train_probe_local(config: TrainingConfig, output_dir: Optional[Path] = None)
         layer=config.layer,
         batch_size=config.batch_size,
         device=config.device,
-        verbose=True
+        verbose=True,
+        use_all_tokens=config.use_all_tokens,
+        exclude_last_n_tokens=config.exclude_last_n_tokens
     )
     print(f"  ✓ Extracted activations: {activation_data.positive_acts.shape}")
     print()
@@ -104,18 +106,29 @@ def train_probe_local(config: TrainingConfig, output_dir: Optional[Path] = None)
     output_dir.mkdir(parents=True, exist_ok=True)
     probe_path = output_dir / "probe.pt"
     
-    # Save probe weights
-    torch.save(probe_weights, probe_path)
-    
+    # Save probe weights and normalization parameters
+    probe_data = {
+        "weights": probe_weights,
+        "normalize": metrics.get("normalize", True),
+        "normalization_mean": metrics.get("normalization_mean"),
+        "normalization_std": metrics.get("normalization_std"),
+    }
+    torch.save(probe_data, probe_path)
+
     # Save config and metrics
     config_path = output_dir / "config.json"
     with open(config_path, 'w') as f:
+        # Remove normalization tensors from metrics for JSON serialization
+        json_metrics = {k: v for k, v in metrics.items()
+                       if k not in ["normalization_mean", "normalization_std"]}
+        json_metrics["normalize"] = metrics.get("normalize", True)
+
         json.dump({
             "dataset": config.dataset_name,
             "model": config.model,
             "method": config.method,
             "layer": config.layer,
-            "metrics": metrics,
+            "metrics": json_metrics,
             "created_at": datetime.now().isoformat(),
         }, f, indent=2)
     

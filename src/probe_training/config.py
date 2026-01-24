@@ -7,9 +7,9 @@ from typing import Optional, Dict, Any
 @dataclass
 class TrainingConfig:
     """Configuration for probe training.
-    
+
     Attributes:
-        dataset_name: Name of the dataset (e.g., "roleplaying", "truthfulqa")
+        dataset_name: Name of the dataset (e.g., "roleplaying", "truthfulqa", "repe_honesty")
         model: Model name (e.g., "meta-llama/Meta-Llama-3.1-8B-Instruct")
         method: Training method name (e.g., "linear-contrastive", "massmean")
         layer: Layer number to extract activations from
@@ -19,7 +19,11 @@ class TrainingConfig:
         val_split: Validation split ratio (0.0-1.0)
         seed: Random seed for reproducibility
         device: Device to train on ("cuda" or "cpu")
-        additional_params: Method-specific additional parameters
+        use_all_tokens: If True, uses mean of all response tokens (Apollo's approach).
+                       If False, uses only last token (legacy approach).
+        exclude_last_n_tokens: Number of tokens to exclude from the end when use_all_tokens=True.
+                              Set to 5 for REPE/instructed pairs dataset, 0 for others.
+        additional_params: Method-specific additional parameters (e.g., l2_reg for regularization)
     """
     dataset_name: str
     model: str
@@ -33,7 +37,9 @@ class TrainingConfig:
     val_split: float = 0.2
     seed: int = 42
     device: str = "cuda"
-    
+    use_all_tokens: bool = True  # Apollo's approach: use mean of all response tokens
+    exclude_last_n_tokens: int = 0  # For REPE dataset: exclude last N tokens (default 0)
+
     # Method-specific parameters
     additional_params: Dict[str, Any] = field(default_factory=dict)
     

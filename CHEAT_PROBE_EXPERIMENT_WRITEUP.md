@@ -17,7 +17,7 @@ Players take turns claiming to play cards of a specific rank. They can lie about
 
 We tested two 70B Llama probes trained to detect deception:
 
-1. **Deception probe (Apollo)**: Trained on Werewolf roleplaying data to detect intent to mislead
+1. **Deception probe (Apollo)**: Trained on social deception scenarios (students lying about assignments, employees covering mistakes, etc.) to detect intent to mislead
    - Performance on Cheat: **59% accuracy** (poor, often reversed)
    - Honest plays: mean score = 0.562
    - Lying plays: mean score = 0.559
