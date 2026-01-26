@@ -76,6 +76,11 @@ def main():
         type=int,
         help="Random seed for reproducibility"
     )
+    parser.add_argument(
+        "--provide-probe-scores",
+        action="store_true",
+        help="Save probe scores to message logs for analysis"
+    )
 
     # Experiment configuration
     parser.add_argument(
@@ -132,6 +137,7 @@ def main():
         seed=args.seed,
         use_reasoning=not args.no_reasoning,
         share_reasoning=args.share_reasoning,
+        provide_probe_scores=args.provide_probe_scores,
     )
 
     # Print configuration

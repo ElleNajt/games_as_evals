@@ -106,6 +106,18 @@ PROBE_REGISTRY = {
         gpu_count=4,
         estimated_memory_gb=320,  # 4x 80GB H100s
     ),
+    "instructive_pairs_8b": ProbeConfig(
+        probe_name="instructive_pairs_8b",
+        volume_path="repe_honesty_roleplay_Meta-Llama-3.1-8B-Instruct_linear-contrastive_layer20_l25p0",  # Path on Modal volume (was uploaded with this name)
+        probe_type="hallucination",  # Similar to hallucination, detects truthfulness
+        model_name="meta-llama/Meta-Llama-3.1-8B-Instruct",
+        layer=20,
+        description="8B instructive pairs probe (AUROC 0.7851) for truthfulness detection in poker",
+        modal_app_name="unified-probe-service",
+        gpu_type="A10G",
+        gpu_count=1,
+        estimated_memory_gb=20,
+    ),
 }
 
 
