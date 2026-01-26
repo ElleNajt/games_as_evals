@@ -59,6 +59,7 @@ def train_probe_on_modal(
     num_epochs: int = 10,
     batch_size: int = 8,
     seed: int = 42,
+    additional_params: str = "",  # Changed from Optional[Dict[str, Any]] to str for Modal CLI compatibility
 ) -> Dict[str, Any]:
     """Train a probe on Modal with GPU acceleration.
 
@@ -79,6 +80,13 @@ def train_probe_on_modal(
     from typing import List, Tuple
 
     import einops
+    import json
+
+    # Parse string parameter into dict for Modal CLI compatibility
+    if additional_params:
+        additional_params_dict = json.loads(additional_params) if isinstance(additional_params, str) else additional_params
+    else:
+        additional_params_dict = {}
     import torch
     import torch.nn as nn
     import torch.optim as optim
@@ -127,8 +135,15 @@ def train_probe_on_modal(
         batch_size: int = 8,
         device: str = "cuda",
         verbose: bool = True,
+        use_all_tokens: bool = True,
+        exclude_last_n_tokens: int = 0,
     ):
-        """Extract activations from a list of texts."""
+        """Extract activations from a list of texts.
+
+        Args:
+            use_all_tokens: If True, use mean of all tokens (Apollo's approach)
+            exclude_last_n_tokens: Number of tokens to exclude from end (for REPE)
+        """
         all_activations = []
 
         for i in range(0, len(texts), batch_size):
@@ -150,9 +165,29 @@ def train_probe_on_modal(
                     layer
                 ]  # [batch, seq_len, hidden_dim]
 
-                # Take last token activation for each example
-                last_token_acts = hidden_states[:, -1, :]  # [batch, hidden_dim]
-                all_activations.append(last_token_acts.cpu())
+                if use_all_tokens:
+                    # Use mean of all response tokens (Apollo's approach)
+                    attention_mask = inputs.attention_mask.unsqueeze(-1).float()
+
+                    # Exclude last N tokens if specified (for REPE dataset)
+                    if exclude_last_n_tokens > 0:
+                        batch_size_local, seq_len, hidden_dim = hidden_states.shape
+                        for j in range(batch_size_local):
+                            # Find last valid token position
+                            last_pos = attention_mask[j, :, 0].sum().long() - 1
+                            # Zero out the last N tokens
+                            start_exclude = max(0, last_pos - exclude_last_n_tokens + 1)
+                            attention_mask[j, start_exclude:last_pos+1, :] = 0
+
+                    # Compute masked mean
+                    masked_hidden_states = hidden_states * attention_mask
+                    token_counts = attention_mask.sum(dim=1).clamp(min=1)
+                    mean_activations = masked_hidden_states.sum(dim=1) / token_counts
+                    all_activations.append(mean_activations.cpu())
+                else:
+                    # Take last token activation for each example (legacy)
+                    last_token_acts = hidden_states[:, -1, :]  # [batch, hidden_dim]
+                    all_activations.append(last_token_acts.cpu())
 
         return torch.cat(all_activations, dim=0)  # [n_examples, hidden_dim]
 
@@ -164,6 +199,8 @@ def train_probe_on_modal(
         batch_size: int = 8,
         device: str = "cuda",
         verbose: bool = True,
+        use_all_tokens: bool = True,
+        exclude_last_n_tokens: int = 0,
     ):
         """Extract activations for positive and negative examples."""
         positive_texts = [pair.positive for pair in dataset_pairs]
@@ -174,7 +211,8 @@ def train_probe_on_modal(
                 f"  Extracting activations for {len(positive_texts)} positive examples..."
             )
         pos_acts = extract_activations_from_text(
-            model, tokenizer, positive_texts, layer, batch_size, device, verbose=False
+            model, tokenizer, positive_texts, layer, batch_size, device, verbose=False,
+            use_all_tokens=use_all_tokens, exclude_last_n_tokens=exclude_last_n_tokens
         )
 
         if verbose:
@@ -182,7 +220,8 @@ def train_probe_on_modal(
                 f"  Extracting activations for {len(negative_texts)} negative examples..."
             )
         neg_acts = extract_activations_from_text(
-            model, tokenizer, negative_texts, layer, batch_size, device, verbose=False
+            model, tokenizer, negative_texts, layer, batch_size, device, verbose=False,
+            use_all_tokens=use_all_tokens, exclude_last_n_tokens=exclude_last_n_tokens
         )
 
         return ActivationData(positive_acts=pos_acts, negative_acts=neg_acts)
@@ -221,12 +260,33 @@ def train_probe_on_modal(
         return direction, metrics
 
     def train_linear_contrastive(
-        activation_data: ActivationData, learning_rate: float, num_epochs: int
+        activation_data: ActivationData, learning_rate: float, num_epochs: int,
+        l2_reg: float = 0.0, normalize: bool = True
     ):
-        """Train linear probe with contrastive loss."""
+        """Train linear probe with contrastive loss and optional L2 regularization.
+
+        Args:
+            activation_data: Training activations
+            learning_rate: Learning rate
+            num_epochs: Number of epochs
+            l2_reg: L2 regularization strength (lambda parameter)
+            normalize: Whether to normalize activations
+        """
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         pos_acts = activation_data.positive_acts.to(device).to(torch.float32)
         neg_acts = activation_data.negative_acts.to(device).to(torch.float32)
+
+        # Normalize activations if requested (Apollo's approach)
+        norm_mean = None
+        norm_std = None
+        if normalize:
+            all_acts = torch.cat([pos_acts, neg_acts], dim=0)
+            norm_mean = all_acts.mean(dim=0, keepdim=True)
+            norm_std = all_acts.std(dim=0, keepdim=True)
+            norm_std = torch.clamp(norm_std, min=1e-8)
+
+            pos_acts = (pos_acts - norm_mean) / norm_std
+            neg_acts = (neg_acts - norm_mean) / norm_std
 
         hidden_dim = pos_acts.shape[1]
 
@@ -250,7 +310,13 @@ def train_probe_on_modal(
             neg_scores = neg_acts @ norm_direction
 
             # Contrastive loss
-            loss = -pos_scores.mean() + neg_scores.mean()
+            contrastive_loss = -pos_scores.mean() + neg_scores.mean()
+
+            # Add L2 regularization penalty
+            l2_penalty = l2_reg * (direction.norm() ** 2)
+
+            # Total loss
+            loss = contrastive_loss + l2_penalty
 
             loss.backward()
             optimizer.step()
@@ -271,6 +337,10 @@ def train_probe_on_modal(
 
         metrics = {
             "final_loss": best_loss,
+            "l2_reg": l2_reg,
+            "normalize": normalize,
+            "normalization_mean": norm_mean.cpu().squeeze() if norm_mean is not None else None,
+            "normalization_std": norm_std.cpu().squeeze() if norm_std is not None else None,
             "accuracy": accuracy,
             "mean_pos_score": pos_scores.mean().item(),
             "mean_neg_score": neg_scores.mean().item(),
@@ -440,6 +510,8 @@ def train_probe_on_modal(
         batch_size=batch_size,
         device="cuda",
         verbose=True,
+        use_all_tokens=additional_params_dict.get('use_all_tokens', True),
+        exclude_last_n_tokens=additional_params_dict.get('exclude_last_n_tokens', 0),
     )
     print(
         f"  ✓ Extracted training activations: {train_activation_data.positive_acts.shape}"
@@ -457,6 +529,8 @@ def train_probe_on_modal(
             batch_size=batch_size,
             device="cuda",
             verbose=False,
+            use_all_tokens=additional_params_dict.get('use_all_tokens', True),
+            exclude_last_n_tokens=additional_params_dict.get('exclude_last_n_tokens', 0),
         )
         print(
             f"  ✓ Extracted validation activations: {val_activation_data.positive_acts.shape}"
@@ -474,7 +548,9 @@ def train_probe_on_modal(
         probe_weights, train_metrics = train_massmean(train_activation_data)
     elif method == "linear-contrastive":
         probe_weights, train_metrics = train_linear_contrastive(
-            train_activation_data, learning_rate, num_epochs
+            train_activation_data, learning_rate, num_epochs,
+            l2_reg=additional_params_dict.get('l2_reg', 0.0),
+            normalize=additional_params_dict.get('normalize', True)
         )
     elif method == "lda":
         probe_weights, train_metrics = train_lda(train_activation_data)
@@ -527,6 +603,16 @@ def train_probe_on_modal(
     }
     probe_path = probe_dir / "probe_head.bin"
     torch.save(probe_state_dict, probe_path)
+
+    # Also save probe with normalization parameters (Apollo format)
+    probe_data_with_norm = {
+        "weights": probe_weights,
+        "normalize": train_metrics.get("normalize", True),
+        "normalization_mean": train_metrics.get("normalization_mean"),
+        "normalization_std": train_metrics.get("normalization_std"),
+    }
+    probe_full_path = probe_dir / "probe.pt"
+    torch.save(probe_data_with_norm, probe_full_path)
 
     # Save config in the format expected by inference service
     probe_config_data = {
@@ -606,23 +692,27 @@ def download_probe_from_volume(probe_name: str, modal_path: str, local_path: str
 @app.function(
     volumes={VOLUME_PATH: VOLUME},
 )
-def upload_dataset_files(dataset_name: str, files_data: Dict[str, str]):
+def upload_dataset_files(dataset_name: str, files_data: str):
     """Upload dataset files to Modal volume.
 
     Args:
         dataset_name: Name for the dataset
-        files_data: Dictionary of {filename: file_content}
+        files_data: JSON string containing dictionary of {filename: file_content}
     """
+    import json
     from pathlib import Path
 
     print(f"Uploading dataset '{dataset_name}' to volume...")
+
+    # Parse JSON string to dictionary
+    files_dict = json.loads(files_data) if isinstance(files_data, str) else files_data
 
     # Create dataset directory on volume
     volume_dataset_path = Path(VOLUME_PATH) / "datasets" / dataset_name
     volume_dataset_path.mkdir(parents=True, exist_ok=True)
 
     # Write each file
-    for filename, content in files_data.items():
+    for filename, content in files_dict.items():
         file_path = volume_dataset_path / filename
         with open(file_path, "w") as f:
             f.write(content)
@@ -642,11 +732,12 @@ def sweep_layers_on_modal(
     dataset_name: str,
     model_name: str,
     method: str,
-    layers: Optional[List[int]] = None,
+    layers: str = "",  # Changed from Optional[List[int]] to str for Modal CLI compatibility
     learning_rate: float = 1e-3,
     num_epochs: int = 100,
     batch_size: int = 8,
     seed: int = 42,
+    additional_params: str = "",  # Changed from Optional[Dict[str, Any]] to str for Modal CLI compatibility
 ) -> Dict[str, Any]:
     """Sweep across layers to find best probe using AUROC.
 
@@ -654,11 +745,12 @@ def sweep_layers_on_modal(
         dataset_name: Name of dataset (e.g., "roleplaying")
         model_name: HuggingFace model name
         method: Training method
-        layers: List of layers to test (None = all layers)
+        layers: JSON string of layer indices or empty string for all layers
         learning_rate: Learning rate for gradient-based methods
         num_epochs: Number of training epochs
         batch_size: Batch size for activation extraction
         seed: Random seed
+        additional_params: JSON string of additional parameters
 
     Returns:
         Dict with best layer, metrics, and all results
@@ -673,6 +765,17 @@ def sweep_layers_on_modal(
     from typing import List, Optional, Dict
     import numpy as np
     from sklearn.metrics import roc_auc_score
+
+    # Parse string parameters into correct types
+    if layers:
+        layers_list = json.loads(layers) if isinstance(layers, str) else layers
+    else:
+        layers_list = None
+
+    if additional_params:
+        additional_params_dict = json.loads(additional_params) if isinstance(additional_params, str) else additional_params
+    else:
+        additional_params_dict = {}
 
     # Inline data structures
     @dataclass
@@ -701,7 +804,8 @@ def sweep_layers_on_modal(
         model.eval()
         return model, tokenizer
 
-    def extract_activations_from_text(model, tokenizer, texts, layer, batch_size=8, device="cuda"):
+    def extract_activations_from_text(model, tokenizer, texts, layer, batch_size=8, device="cuda",
+                                     use_all_tokens=True, exclude_last_n_tokens=0):
         all_activations = []
         for i in range(0, len(texts), batch_size):
             batch_texts = texts[i:i + batch_size]
@@ -709,21 +813,86 @@ def sweep_layers_on_modal(
             with torch.no_grad():
                 outputs = model(**inputs, output_hidden_states=True)
                 hidden_states = outputs.hidden_states[layer]
-                last_token_acts = hidden_states[:, -1, :]
-                all_activations.append(last_token_acts.cpu())
+
+                if use_all_tokens:
+                    # Use mean of all response tokens (Apollo's approach)
+                    attention_mask = inputs.attention_mask.unsqueeze(-1).float()
+
+                    # Exclude last N tokens if specified (for REPE dataset)
+                    if exclude_last_n_tokens > 0:
+                        batch_size_local, seq_len, hidden_dim = hidden_states.shape
+                        for j in range(batch_size_local):
+                            # Find last valid token position
+                            last_pos = attention_mask[j, :, 0].sum().long() - 1
+                            # Zero out the last N tokens
+                            start_exclude = max(0, last_pos - exclude_last_n_tokens + 1)
+                            attention_mask[j, start_exclude:last_pos+1, :] = 0
+
+                    # Compute masked mean
+                    masked_hidden_states = hidden_states * attention_mask
+                    token_counts = attention_mask.sum(dim=1).clamp(min=1)
+                    mean_activations = masked_hidden_states.sum(dim=1) / token_counts
+                    all_activations.append(mean_activations.cpu())
+                else:
+                    # Use last token only (legacy)
+                    last_token_acts = hidden_states[:, -1, :]
+                    all_activations.append(last_token_acts.cpu())
+
         return torch.cat(all_activations, dim=0)
 
-    def extract_contrastive_activations(model, tokenizer, dataset_pairs, layer, batch_size=8, device="cuda"):
+    def extract_contrastive_activations(model, tokenizer, dataset_pairs, layer, batch_size=8, device="cuda",
+                                       use_all_tokens=True, exclude_last_n_tokens=0):
         positive_texts = [pair.positive for pair in dataset_pairs]
         negative_texts = [pair.negative for pair in dataset_pairs]
-        pos_acts = extract_activations_from_text(model, tokenizer, positive_texts, layer, batch_size, device)
-        neg_acts = extract_activations_from_text(model, tokenizer, negative_texts, layer, batch_size, device)
+        pos_acts = extract_activations_from_text(model, tokenizer, positive_texts, layer, batch_size, device,
+                                                use_all_tokens, exclude_last_n_tokens)
+        neg_acts = extract_activations_from_text(model, tokenizer, negative_texts, layer, batch_size, device,
+                                                use_all_tokens, exclude_last_n_tokens)
         return ActivationData(positive_acts=pos_acts, negative_acts=neg_acts)
 
-    def train_linear_contrastive(activation_data, learning_rate, num_epochs):
+    def train_massmean(activation_data):
+        """Train mass-mean probe (difference of means)."""
+        pos_acts = activation_data.positive_acts
+        neg_acts = activation_data.negative_acts
+
+        # Compute mean activations
+        pos_mean = pos_acts.mean(dim=0)
+        neg_mean = neg_acts.mean(dim=0)
+
+        # Direction is difference of means
+        direction = pos_mean - neg_mean
+        direction = direction / (direction.norm() + 1e-8)
+
+        # Compute metrics
+        with torch.no_grad():
+            pos_scores = pos_acts @ direction
+            neg_scores = neg_acts @ direction
+            correct = (pos_scores > 0).sum() + (neg_scores < 0).sum()
+            total = len(pos_scores) + len(neg_scores)
+            accuracy = (correct.float() / total).item()
+
+        metrics = {
+            "accuracy": accuracy,
+            "separation": (pos_scores.mean() - neg_scores.mean()).item(),
+        }
+        return direction.cpu(), metrics
+
+    def train_linear_contrastive(activation_data, learning_rate, num_epochs, l2_reg=0.0, normalize=True):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         pos_acts = activation_data.positive_acts.to(device).to(torch.float32)
         neg_acts = activation_data.negative_acts.to(device).to(torch.float32)
+
+        # Normalize activations if requested (Apollo's approach)
+        norm_mean = None
+        norm_std = None
+        if normalize:
+            all_acts = torch.cat([pos_acts, neg_acts], dim=0)
+            norm_mean = all_acts.mean(dim=0, keepdim=True)
+            norm_std = all_acts.std(dim=0, keepdim=True)
+            norm_std = torch.clamp(norm_std, min=1e-8)
+            pos_acts = (pos_acts - norm_mean) / norm_std
+            neg_acts = (neg_acts - norm_mean) / norm_std
+
         hidden_dim = pos_acts.shape[1]
 
         direction = nn.Parameter(torch.randn(hidden_dim, device=device, dtype=torch.float32))
@@ -737,7 +906,12 @@ def sweep_layers_on_modal(
             norm_direction = direction / (direction.norm() + 1e-8)
             pos_scores = pos_acts @ norm_direction
             neg_scores = neg_acts @ norm_direction
-            loss = -pos_scores.mean() + neg_scores.mean()
+
+            # Contrastive loss with L2 regularization
+            contrastive_loss = -pos_scores.mean() + neg_scores.mean()
+            l2_penalty = l2_reg * (direction.norm() ** 2)
+            loss = contrastive_loss + l2_penalty
+
             loss.backward()
             optimizer.step()
 
@@ -756,6 +930,10 @@ def sweep_layers_on_modal(
         metrics = {
             "accuracy": accuracy,
             "separation": (pos_scores.mean() - neg_scores.mean()).item(),
+            "l2_reg": l2_reg,
+            "normalize": normalize,
+            "normalization_mean": norm_mean.cpu().squeeze() if norm_mean is not None else None,
+            "normalization_std": norm_std.cpu().squeeze() if norm_std is not None else None,
         }
         return final_direction.cpu(), metrics
 
@@ -803,28 +981,38 @@ def sweep_layers_on_modal(
     model, tokenizer = load_model_and_tokenizer(model_name, device="cuda")
 
     # Determine layers to sweep
-    if layers is None:
+    if layers_list is None:
         num_layers = model.config.num_hidden_layers
-        layers = list(range(num_layers))
+        layers_list = list(range(num_layers))
 
-    print(f"Sweeping layers: {layers}")
+    print(f"Sweeping layers: {layers_list}")
     print()
 
     # Sweep layers
     results = []
     all_probes = {}
 
-    for layer in layers:
+    for layer in layers_list:
         print(f"Layer {layer}:")
 
         # Extract activations
         print("  Extracting training activations...")
-        train_acts = extract_contrastive_activations(model, tokenizer, train_data, layer, batch_size, "cuda")
+        train_acts = extract_contrastive_activations(
+            model, tokenizer, train_data, layer, batch_size, "cuda",
+            use_all_tokens=additional_params_dict.get('use_all_tokens', True),
+            exclude_last_n_tokens=additional_params_dict.get('exclude_last_n_tokens', 0)
+        )
 
         # Train probe
         print(f"  Training with {method}...")
         if method == "linear-contrastive":
-            probe_weights, train_metrics = train_linear_contrastive(train_acts, learning_rate, num_epochs)
+            probe_weights, train_metrics = train_linear_contrastive(
+                train_acts, learning_rate, num_epochs,
+                l2_reg=additional_params_dict.get('l2_reg', 0.0),
+                normalize=additional_params_dict.get('normalize', True)
+            )
+        elif method == "massmean":
+            probe_weights, train_metrics = train_massmean(train_acts)
         else:
             raise ValueError(f"Method {method} not yet supported in sweep")
 
@@ -846,12 +1034,20 @@ def sweep_layers_on_modal(
             total = len(pos_scores) + len(neg_scores)
             val_accuracy = (correct.float() / total).item()
 
+        # Convert tensors to lists for JSON serialization
+        norm_mean = train_metrics.get('normalization_mean')
+        norm_std = train_metrics.get('normalization_std')
+
         metrics = {
             'layer': layer,
             'train_accuracy': train_metrics['accuracy'],
             'train_separation': train_metrics['separation'],
             'val_accuracy': val_accuracy,
             'val_auroc': val_auroc,
+            'l2_reg': train_metrics.get('l2_reg', 0.0),
+            'normalize': train_metrics.get('normalize', True),
+            'normalization_mean': norm_mean.tolist() if norm_mean is not None and hasattr(norm_mean, 'tolist') else None,
+            'normalization_std': norm_std.tolist() if norm_std is not None and hasattr(norm_std, 'tolist') else None,
         }
 
         print(f"  Train acc: {metrics['train_accuracy']:.4f}, Val AUROC: {val_auroc:.4f}")
@@ -871,8 +1067,9 @@ def sweep_layers_on_modal(
     print(f"Best layer: {best_layer} (AUROC: {best_result['val_auroc']:.4f})")
     print("=" * 70)
 
-    # Save best probe
-    probe_name = f"{dataset_name}_{model_name.split('/')[-1]}_{method}_layer{best_layer}"
+    # Save best probe with descriptive name including l2_reg
+    l2_reg_str = f"_l2{best_result.get('l2_reg', 0.0)}".replace(".", "p")
+    probe_name = f"{dataset_name}_{model_name.split('/')[-1]}_{method}_layer{best_layer}{l2_reg_str}"
     probe_dir = Path(VOLUME_PATH) / "models" / "probes" / probe_name
     probe_dir.mkdir(parents=True, exist_ok=True)
 
@@ -881,6 +1078,22 @@ def sweep_layers_on_modal(
         "bias": torch.zeros(1),
     }
     torch.save(probe_state_dict, probe_dir / "probe_head.bin")
+
+    # Also save probe with normalization parameters (Apollo format)
+    # Note: normalization_mean and normalization_std are already converted to lists in metrics
+    # but we need to convert them back to tensors for the probe.pt file
+    import numpy as np
+    norm_mean_list = best_result.get("normalization_mean")
+    norm_std_list = best_result.get("normalization_std")
+
+    probe_data_with_norm = {
+        "weights": best_probe,
+        "normalize": best_result.get("normalize", True),
+        "normalization_mean": torch.tensor(norm_mean_list) if norm_mean_list is not None else None,
+        "normalization_std": torch.tensor(norm_std_list) if norm_std_list is not None else None,
+    }
+    probe_full_path = probe_dir / "probe.pt"
+    torch.save(probe_data_with_norm, probe_full_path)
 
     probe_config_data = {
         "hidden_size": 4096,
@@ -892,14 +1105,25 @@ def sweep_layers_on_modal(
     with open(probe_dir / "probe_config.json", "w") as f:
         json.dump(probe_config_data, f, indent=2)
 
+    # Clean up metrics for JSON serialization (remove tensor objects)
+    def clean_metrics(metrics):
+        cleaned = {}
+        for k, v in metrics.items():
+            if k not in ['normalization_mean', 'normalization_std']:
+                cleaned[k] = v
+        return cleaned
+
+    best_result_clean = clean_metrics(best_result)
+    results_clean = [clean_metrics(m) for m in results]
+
     sweep_metadata = {
         "dataset": dataset_name,
         "model": model_name,
         "method": method,
-        "layers_tested": layers,
+        "layers_tested": layers_list,
         "best_layer": best_layer,
-        "best_metrics": best_result,
-        "all_results": results,
+        "best_metrics": best_result_clean,
+        "all_results": results_clean,
     }
     with open(probe_dir / "layer_sweep_results.json", "w") as f:
         json.dump(sweep_metadata, f, indent=2)
@@ -910,10 +1134,192 @@ def sweep_layers_on_modal(
     return {
         "best_layer": best_layer,
         "best_probe_name": probe_name,
-        "best_metrics": best_result,
-        "all_results": results,
+        "best_metrics": best_result_clean,
+        "all_results": results_clean,
         "volume_path": str(probe_dir),
     }
+
+
+@app.function(
+    gpu=GPU_CONFIG_8B,
+    volumes={VOLUME_PATH: VOLUME},
+    image=image,
+    timeout=3600,
+)
+def evaluate_probe_on_modal(
+    probe_name: str,
+    eval_dataset_name: str,
+    model_name: str = "meta-llama/Meta-Llama-3.1-8B-Instruct",
+    use_all_tokens: bool = True,
+    exclude_last_n_tokens: int = 5,
+):
+    """Evaluate a saved probe on a different dataset for OOD testing.
+
+    Args:
+        probe_name: Name of the saved probe (e.g., "repe_honesty_roleplay_Meta-Llama-3.1-8B-Instruct_linear-contrastive_layer20_l25p0")
+        eval_dataset_name: Dataset to evaluate on (e.g., "repe_honesty")
+        model_name: Model name (must match the probe's training model)
+        use_all_tokens: Whether to use all tokens (matching probe training)
+        exclude_last_n_tokens: Number of tokens to exclude from the end
+
+    Returns:
+        Dictionary with evaluation metrics including AUROC
+    """
+    import torch
+    import json
+    from pathlib import Path
+    from sklearn.metrics import roc_auc_score
+    import numpy as np
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print("=" * 70)
+    print("Cross-Dataset Probe Evaluation")
+    print("=" * 70)
+    print(f"Probe: {probe_name}")
+    print(f"Evaluation Dataset: {eval_dataset_name}")
+    print(f"Model: {model_name}")
+    print("=" * 70)
+    print()
+
+    # Step 1: Load the saved probe
+    print("Step 1/4: Loading saved probe...")
+    probe_dir = Path(VOLUME_PATH) / "models" / "probes" / probe_name
+
+    if not probe_dir.exists():
+        raise FileNotFoundError(f"Probe not found: {probe_dir}")
+
+    # Load probe config to get layer info
+    config_path = probe_dir / "probe_config.json"
+    with open(config_path, "r") as f:
+        probe_config = json.load(f)
+    layer = probe_config["layer_idx"]
+
+    # Load probe weights with normalization parameters
+    probe_path = probe_dir / "probe.pt"
+    probe_data = torch.load(probe_path, map_location=device)
+    probe_weights = probe_data["weights"].to(device)
+    normalize = probe_data.get("normalize", True)
+    norm_mean = probe_data.get("normalization_mean")
+    norm_std = probe_data.get("normalization_std")
+
+    if norm_mean is not None:
+        norm_mean = torch.tensor(norm_mean, device=device)
+    if norm_std is not None:
+        norm_std = torch.tensor(norm_std, device=device)
+
+    print(f"  ✓ Loaded probe from layer {layer}")
+    print(f"  ✓ Normalization: {normalize}")
+    print()
+
+    # Step 2: Load evaluation dataset
+    print("Step 2/4: Loading evaluation dataset...")
+    dataset_path = Path(VOLUME_PATH) / "datasets" / eval_dataset_name
+
+    if not dataset_path.exists():
+        raise FileNotFoundError(f"Dataset not found: {dataset_path}")
+
+    # Load test/val data
+    test_file = dataset_path / "test.jsonl"
+    val_file = dataset_path / "val.jsonl"
+
+    eval_data = []
+    eval_file = test_file if test_file.exists() else val_file
+
+    with open(eval_file, "r") as f:
+        for line in f:
+            data = json.loads(line)
+            eval_data.append(
+                ContrastivePair(
+                    positive=data["positive"],
+                    negative=data["negative"],
+                    metadata=data.get("metadata"),
+                )
+            )
+
+    print(f"  ✓ Loaded {len(eval_data)} evaluation examples")
+    print()
+
+    # Step 3: Load model and extract activations
+    print("Step 3/4: Loading model and extracting activations...")
+    model, tokenizer = load_model_and_tokenizer(model_name, device="cuda")
+
+    # Extract activations
+    eval_activations = []
+    for batch_start in range(0, len(eval_data), 8):
+        batch_end = min(batch_start + 8, len(eval_data))
+        batch = eval_data[batch_start:batch_end]
+
+        batch_texts = []
+        for pair in batch:
+            batch_texts.append(pair.positive)
+            batch_texts.append(pair.negative)
+
+        acts = extract_activations(
+            model,
+            tokenizer,
+            batch_texts,
+            layer=layer,
+            use_all_tokens=use_all_tokens,
+            exclude_last_n_tokens=exclude_last_n_tokens,
+        ).to(device)
+
+        eval_activations.append(acts)
+
+    eval_acts = torch.cat(eval_activations, dim=0)
+    pos_acts = eval_acts[0::2]  # Even indices are positive
+    neg_acts = eval_acts[1::2]  # Odd indices are negative
+
+    print(f"  ✓ Extracted activations for {len(eval_data)} pairs")
+    print()
+
+    # Step 4: Evaluate probe
+    print("Step 4/4: Evaluating probe...")
+
+    # Apply normalization if needed
+    if normalize and norm_mean is not None and norm_std is not None:
+        pos_acts = (pos_acts - norm_mean) / (norm_std + 1e-8)
+        neg_acts = (neg_acts - norm_mean) / (norm_std + 1e-8)
+
+    # Compute scores
+    with torch.no_grad():
+        pos_scores = pos_acts @ probe_weights
+        neg_scores = neg_acts @ probe_weights
+
+        # Compute accuracy
+        correct = (pos_scores > 0).sum() + (neg_scores < 0).sum()
+        total = len(pos_scores) + len(neg_scores)
+        accuracy = (correct.float() / total).item()
+
+        # Compute AUROC
+        all_scores = torch.cat([pos_scores, neg_scores]).cpu().numpy()
+        all_labels = np.array([1] * len(pos_scores) + [0] * len(neg_scores))
+        auroc = roc_auc_score(all_labels, all_scores)
+
+        # Additional metrics
+        mean_pos_score = pos_scores.mean().item()
+        mean_neg_score = neg_scores.mean().item()
+        separation = mean_pos_score - mean_neg_score
+
+    metrics = {
+        "accuracy": accuracy,
+        "auroc": auroc,
+        "mean_pos_score": mean_pos_score,
+        "mean_neg_score": mean_neg_score,
+        "separation": separation,
+        "num_examples": len(eval_data),
+    }
+
+    print()
+    print("=" * 70)
+    print("Evaluation Results:")
+    print(f"  Accuracy: {accuracy:.4f}")
+    print(f"  AUROC: {auroc:.4f}")
+    print(f"  Mean Positive Score: {mean_pos_score:.4f}")
+    print(f"  Mean Negative Score: {mean_neg_score:.4f}")
+    print(f"  Separation: {separation:.4f}")
+    print("=" * 70)
+
+    return metrics
 
 
 @app.local_entrypoint()
