@@ -1,0 +1,107 @@
+{
+  "title": "8B Probe Poker Experiment Results",
+  "date": "2026-01-24 14:28:10",
+  "experiments": {
+    "deception_8b": {
+      "probe_type": "Apollo Deception Probe (8B, Layer 12)",
+      "experiment": "poker_8b_deception_with_scores",
+      "games": 50,
+      "card_variant": "3-card Kuhn Poker",
+      "statistics": {
+        "bluffing": {
+          "count": 42,
+          "mean": 0.6173,
+          "std_dev": 0.0318,
+          "min": 0.5439,
+          "max": 0.6921
+        },
+        "honest_weak": {
+          "count": 20,
+          "mean": 0.5994,
+          "std_dev": 0.0387,
+          "min": 0.5204,
+          "max": 0.6607
+        },
+        "strong_betting": {
+          "count": 6,
+          "mean": 0.5975,
+          "std_dev": 0.0191,
+          "min": 0.5727,
+          "max": 0.6255
+        },
+        "slow_play": {
+          "count": 6,
+          "mean": 0.5978,
+          "std_dev": 0.0288,
+          "min": 0.5553,
+          "max": 0.6419
+        }
+      },
+      "key_findings": {
+        "bluffing_vs_honest_weak": 0.018,
+        "interpretation": "Positive = probe scores higher when bluffing"
+      },
+      "slow_play_vs_strong_bet": {
+        "difference": 0.0003,
+        "interpretation": "Negative = probe scores lower when slow-playing (unexpected)"
+      }
+    },
+    "hallucination_8b_3card": {
+      "probe_type": "Hallucination Probe (8B, Layer 30)",
+      "experiment": "poker_8b_hallucination_100games_0fabb5b_6a014dd_dirty",
+      "games": 100,
+      "card_variant": "3-card poker",
+      "statistics": {
+        "bluffing": {
+          "count": 63,
+          "mean": 0,
+          "std_dev": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "honest_weak": {
+          "count": 34,
+          "mean": 0,
+          "std_dev": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "strong_betting": {
+          "count": 31,
+          "mean": 0,
+          "std_dev": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "slow_play": {
+          "count": 8,
+          "mean": 0,
+          "std_dev": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "middle_bet": {
+          "count": 1,
+          "mean": 0,
+          "std_dev": 0,
+          "min": 0,
+          "max": 0
+        }
+      },
+      "key_findings": {
+        "bluffing_vs_honest_weak": 0,
+        "interpretation": "Negative = probe scores LOWER when bluffing (counterintuitive)"
+      }
+    }
+  },
+  "conclusions": {
+    "main_finding": "Probes trained on factual deception/hallucination do not generalize to strategic poker deception",
+    "evidence": [
+      "8B Deception probe: Only 0.56% difference between bluffing and honest play",
+      "8B Hallucination probe: Bluffing scores LOWER than honest play (opposite of expected)",
+      "Slow-playing (deceptive) scores 2.58% LOWER than honest strong betting",
+      "All scores cluster tightly around 0.59-0.62 regardless of strategy"
+    ],
+    "implications": "Deception detection is highly context-specific. Probes must be trained on the specific type of deception they need to detect."
+  }
+}
